@@ -30,6 +30,8 @@ Validates implemented features from the user's perspective. Coordinates speciali
 | 4 | Error Path Tester | Test failure handling |
 | 5 | Orchestrator | Synthesize report |
 
+**CRITICAL:** Phases 1-4 should use the Task tool to spawn subagents. Phase 1 agents MUST be spawned in parallel (same message, multiple Task calls). This reduces total validation time significantly.
+
 ---
 
 ## Phase 0: Context Loading
@@ -59,6 +61,11 @@ Check for PRD at `.agents/PRD.md` or `PRD*.md` in project root:
 - Extract user stories (US-XXX) for this phase
 - Extract acceptance criteria per story
 - Extract Agent Validation Profile if present (services, workflows, error scenarios)
+
+**Note:** Agent Validation Profile is optional. Projects created before the validation framework may not have this section. In that case, infer testing requirements from:
+- User stories and acceptance criteria in the PRD
+- Tools/workflows listed in the plan
+- Service detection from .env and imports
 
 ### Step 4: Output Context Summary
 
@@ -752,6 +759,9 @@ Validation is complete when:
 | "Service auth failed" | Missing or invalid credentials | Check `.env` for required API keys |
 | "Subagent timeout" | Complex validation taking too long | Check report for partial results |
 | "Mock generation failed" | Can't analyze service responses | Check service integration code for types |
+| "Database not running" | Docker/container not started | Start Docker Desktop, then `docker-compose up -d` |
+| "Connection refused" | Service not available on expected port | Check if service is running: `docker ps`, `lsof -i :PORT` |
+| "No Agent Validation Profile" | PRD created before validation framework | Normal - validation proceeds using plan and detection |
 
 ---
 
@@ -786,3 +796,25 @@ Validation is complete when:
 - Security vulnerabilities
 - UI/UX quality
 - Code style (use lint for that)
+
+### Real-World Testing Insights
+
+Based on testing against production agents (x-agent-v2):
+
+**Common Gaps Found:**
+1. **Rate limit handling** - APIs often miss 429-specific handling with retry_after
+2. **Auth error detection** - 401/403 errors often get generic messages instead of re-auth guidance
+3. **Quota exhaustion** - Service-specific quota errors (YouTube, OpenAI) need specific handling
+4. **Database unavailability** - Docker/container not running is a common blocker
+
+**Validation Command Learnings:**
+1. **Service detection works well** - .env scanning finds 90%+ of services
+2. **Workflow tracing is valuable** - Following code paths reveals integration issues
+3. **Error path testing is critical** - This is where most real issues are found
+4. **Mock Generator is lower priority** - Can skip if time-constrained; focus on Tool/Workflow/Error validators
+
+**Recommendations for Target Projects:**
+- Ensure Docker/database is running before validation
+- Have .env configured with all required credentials
+- Have at least one completed plan in .agents/plans/
+- PRD is helpful but not required - plan-only validation works
