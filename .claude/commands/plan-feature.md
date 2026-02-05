@@ -1,5 +1,5 @@
 ---
-description: "Create comprehensive feature plan with deep codebase analysis and research"
+description: "Create comprehensive feature plan with deep codebase analysis, technology profiles, and agent behavior specs"
 ---
 
 # Plan a new task
@@ -24,11 +24,11 @@ description: "Create comprehensive feature plan with deep codebase analysis and 
 
 ## Mission
 
-Transform a feature request into a **comprehensive implementation plan** through systematic codebase analysis, external research, and strategic planning.
+Transform a feature request into a **comprehensive implementation plan** through systematic codebase analysis, technology profile integration, and strategic agent behavior design.
 
 **Core Principle**: We do NOT write code in this phase. Our goal is to create a context-rich implementation plan that enables one-pass implementation success.
 
-**Key Philosophy**: Context is King. The plan must contain ALL information needed for implementation - patterns, mandatory reading, documentation, validation commands - so the execution agent succeeds on the first attempt.
+**Key Philosophy**: Context is King. The plan must contain ALL information needed for implementation - patterns, mandatory reading, technology integration, agent behavior specs, validation commands - so the execution agent succeeds on the first attempt.
 
 **Two-Phase Process** (when PRD exists):
 1. **Scope Analysis** → Output recommendations with justifications to terminal → User validates
@@ -40,29 +40,40 @@ Transform a feature request into a **comprehensive implementation plan** through
 
 ### Phase 0: Scope Analysis & Recommendations (If PRD Exists)
 
-> **When to run this phase:** If a PRD exists for the project (`.agents/PRD.md` or similar), run this phase FIRST. Output recommendations to terminal, wait for user validation, then proceed to Phase 1.
+> **When to run this phase:** If a PRD exists for the project (`.agents/PRD.md` or similar), run this phase FIRST. Check for research profiles in `.agents/reference/` before generating recommendations.
 
 **If no PRD exists:** Skip Phase 0 and proceed directly to Phase 1.
 
 **Scope Analysis Process:**
 
-1. **Read the PRD Phase**
+1. **Validate Technology Profiles Exist**
+   - Check if `.agents/reference/` directory exists
+   - List all `*-profile.md` files in that directory
+   - If no profiles exist: **WARN**: "Technology profiles not found. Consider running `/research-stack` first for better context."
+   - If profiles exist: Continue with analysis below
+
+2. **Read the PRD Phase**
    - Identify which phase is being planned (from user input or PRD "Current Focus")
    - Extract: What this phase delivers, prerequisites, scope (included/excluded)
    - Extract: User stories addressed by this phase
 
-2. **Map User Stories**
+3. **Map User Stories & Agent Behavior**
    - For each user story in scope, extract acceptance criteria
+   - Review Section 4.2 (Decision Trees) for agent behaviors relevant to this phase
+   - Review Section 4.3 (Scenarios) to understand workflows this phase enables
+   - Review Section 4.4 (Error Recovery Patterns) for failure modes this phase must handle
    - These become validation checkpoints for the plan
 
-3. **Identify Decision Points**
+4. **Identify Decision Points**
    - Find "Discussion Points for Clarification" in the PRD phase
    - Find any ambiguous requirements or multiple valid approaches
-   - List each decision that affects implementation
+   - List each decision that affects implementation or agent behavior
+   - Cross-reference technologies in `.agents/reference/` profiles
 
-4. **Formulate Recommendations**
+5. **Formulate Recommendations**
    - For each decision point, provide a recommendation with justification
    - Justification must reference PRD context, user stories, or codebase patterns
+   - If recommendation involves external technology, reference the technology profile
    - Format: Decision → Recommendation → Why (how it serves the goal)
 
 **Terminal Output Format:**
@@ -72,6 +83,7 @@ Transform a feature request into a **comprehensive implementation plan** through
 
 **PRD Phase:** [N] - [Name]
 **User Stories:** US-XXX, US-XXX
+**Technology Profiles Available**: [list profiles or "none found"]
 **Prerequisites:** [Status of each - ✅ Complete / ⚪ Not Started / 🔴 Blocked]
 
 ### What This Phase Delivers
@@ -81,14 +93,11 @@ Transform a feature request into a **comprehensive implementation plan** through
 
 1. **[Decision Point from PRD Discussion Points]**
    → [Your recommendation]
-   Why: [Justification - how this serves the user story/goal, references to
-   PRD requirements or codebase patterns that inform this choice]
+   Why: [Justification - how this serves the user story/goal, references to PRD requirements, codebase patterns, or technology profiles that inform this choice]
 
 2. **[Another Decision Point]**
    → [Your recommendation]
    Why: [Justification]
-
-[Continue for all decision points...]
 
 ---
 
@@ -110,6 +119,14 @@ Ready to generate plan with these decisions, or would you like to discuss any re
 - Assess complexity: Low/Medium/High
 - Map affected systems and components
 
+**Extract Agent Behavior Requirements:**
+
+If this is an agent-based feature:
+- Review PRD Section 4.2 (Decision Trees) - which decisions will this feature implement?
+- Review PRD Section 4.3 (Scenarios) - which user workflows does this enable?
+- Identify agent tools and APIs needed
+- Map decision branching logic that agent must execute
+
 **Create User Story Format Or Refine If Story Was Provided By The User:**
 
 ```
@@ -130,7 +147,7 @@ So that <benefit/value>
 - Locate configuration files (pyproject.toml, package.json, etc.)
 - Find environment setup and build processes
 
-**2. Pattern Recognition** (Use specialized subagents when beneficial)
+**2. Pattern Recognition**
 
 - Search for similar implementations in codebase
 - Identify coding conventions:
@@ -146,7 +163,7 @@ So that <benefit/value>
 
 - Catalog external libraries relevant to feature
 - Understand how libraries are integrated (check imports, configs)
-- Find relevant documentation in docs/, ai_docs/, .agents/reference or ai-wiki if available
+- Find relevant documentation in docs/, ai_docs/, .agents/reference/ or ai-wiki if available
 - Note library versions and compatibility requirements
 
 **If Planning a New Feature (not bug fix):**
@@ -175,7 +192,33 @@ So that <benefit/value>
 - Get specific implementation preferences (libraries, approaches, patterns)
 - Resolve architectural decisions before proceeding
 
-### Phase 3: External Research & Documentation
+### Phase 3: Technology Profile Integration
+
+**NEW PHASE: Integrates research from `/research-stack` command**
+
+1. **Locate Technology Profiles**
+   - Check if `.agents/reference/` directory exists
+   - List all available `*-profile.md` files
+   - For this feature, identify which profiles are relevant (based on technologies mentioned in PRD or codebase)
+
+2. **Read Relevant Technology Profiles**
+   - For each technology that this feature depends on or integrates with:
+   - Read the full profile from `.agents/reference/{technology-name}-profile.md`
+   - Extract: Authentication approach, API endpoints, rate limits, error handling, SDKs
+   - Extract: Known issues, gotchas, version constraints
+
+3. **Map Profile Endpoints to Feature Tasks**
+   - Identify which specific API endpoints will be called in implementation
+   - Note authentication requirements and token management
+   - Document rate limit implications if applicable
+   - Extract code examples from profile that match feature needs
+
+4. **Cross-reference with Decision Trees**
+   - For agent-based features: Verify that technology capabilities support decision trees in PRD Section 4.2
+   - Identify where agent must fallback or retry based on technology limitations
+   - Document decision criteria that depend on technology responses
+
+### Phase 4: External Research & Supplementary Documentation
 
 **Use specialized subagents when beneficial for external research:**
 
@@ -194,26 +237,9 @@ So that <benefit/value>
 - Identify performance optimization patterns
 - Document security considerations
 
-**If Archon RAG is available and relevant:**
-- Use `mcp__archon__rag_get_available_sources()` to see available documentation
-- Search for relevant patterns: `mcp__archon__rag_search_knowledge_base(query="...")`
-- Find code examples: `mcp__archon__rag_search_code_examples(query="...")`
-- Focus on implementation patterns, best practices, and similar features
+**Focus on:** implementation patterns, best practices, and similar features from official docs and community sources.
 
-**Compile Research References:**
-
-```markdown
-## Relevant Documentation
-
-- [Library Official Docs](https://example.com/docs#section)
-  - Specific feature implementation guide
-  - Why: Needed for X functionality
-- [Framework Guide](https://example.com/guide#integration)
-  - Integration patterns section
-  - Why: Shows how to connect components
-```
-
-### Phase 4: Deep Strategic Thinking
+### Phase 5: Deep Strategic Thinking & Agent Behavior Design
 
 **Think Harder About:**
 
@@ -223,7 +249,14 @@ So that <benefit/value>
 - How will this be tested comprehensively?
 - What performance implications exist?
 - Are there security considerations?
-- How maintainable is this approach?
+
+**Agent Behavior Design:**
+
+- What decisions must the agent make in this feature?
+- What are the decision criteria? (from PRD Section 4.2)
+- How should the agent handle errors or unexpected API responses?
+- What scenarios should be tested? (from PRD Section 4.3)
+- How should the agent recover from failures?
 
 **Design Decisions:**
 
@@ -238,17 +271,18 @@ So that <benefit/value>
 - Ensure interface abstractions (IPlatformAdapter, IAssistantClient, etc.) are included in types section
 - Confirm implementation uses interface types, not concrete classes in core logic
 - Validate against any architectural principles or design constraints in PRD
+- For agent features: Confirm implementation matches decision trees and scenario workflows from Section 4
 
-### Phase 5: Plan Structure Generation
+### Phase 6: Plan Structure Generation
 
 **Create comprehensive plan with the following structure:**
 
-Whats below here is a template for you to fill for th4e implementation agent:
+What's below here is a template for you to fill for the implementation agent:
 
 ```markdown
 # Feature: <feature-name>
 
-The following plan should be complete, but its important that you validate documentation and codebase patterns and task sanity before you start implementing.
+The following plan should be complete, but it's important that you validate documentation and codebase patterns and task sanity before you start implementing.
 
 Pay special attention to naming of existing utils types and models. Import from the right files etc.
 
@@ -276,6 +310,23 @@ So that <benefit/value>
 **Estimated Complexity**: [Low/Medium/High]
 **Primary Systems Affected**: [List of main components/services]
 **Dependencies**: [External libraries or services required]
+**Agent Behavior**: [Yes/No - does this implement agent decision trees or scenarios?]
+
+---
+
+## TECHNOLOGY PROFILES CONSUMED
+
+**Profiles read from `.agents/reference/`:**
+
+- `{technology-name}-profile.md` - Used for: [What feature aspects depend on this tech]
+  - Key endpoints: [endpoint1, endpoint2]
+  - Auth method: [API key / OAuth / etc]
+  - Critical constraints: [rate limits, timeout, etc]
+
+- [Continue for each technology profile read]
+
+**Impact on Implementation:**
+[How the technology capabilities/constraints shape this feature's design]
 
 ---
 
@@ -318,6 +369,35 @@ So that <benefit/value>
 
 ---
 
+## AGENT BEHAVIOR IMPLEMENTATION
+
+**If this feature includes agent decision trees or scenario handling:**
+
+### Decision Trees to Implement
+
+[Reference PRD Section 4.2 - Decision Trees]
+
+- **Decision Tree Name** (PRD Section 4.2.X):
+  - Criteria: [What condition triggers each branch]
+  - Outcomes: [What action agent takes per branch]
+  - Error recovery: [How to handle unexpected responses]
+  - Technology integration: [Which profile endpoints this uses]
+
+### Scenario Mappings
+
+[Reference PRD Section 4.3 - Scenarios]
+
+| Scenario (PRD 4.3.X) | Agent Workflow | Decision Tree Invoked | Success Criteria |
+|---|---|---|---|
+| [Scenario name] | [Steps agent executes] | [Which decision tree] | [PRD acceptance criterion] |
+
+### Error Recovery Patterns
+
+- [Recovery pattern 1 with technology fallback]
+- [Recovery pattern 2]
+
+---
+
 ## IMPLEMENTATION PLAN
 
 ### Phase 1: Foundation
@@ -340,10 +420,11 @@ So that <benefit/value>
 - Create service layer components
 - Add API endpoints or interfaces
 - Implement data models
+- **[If agent feature]** Implement decision trees and scenario handlers
 
 ### Phase 3: Integration
 
-<Describe how feature integrates with existing functionality>
+<Describe how feature integrates with existing functionality and external technologies>
 
 **Tasks:**
 
@@ -351,6 +432,7 @@ So that <benefit/value>
 - Register new components
 - Update configuration files
 - Add middleware or interceptors if needed
+- **[If using technology profile]** Integrate external API calls per profile specification
 
 ### Phase 4: Testing & Validation
 
@@ -361,13 +443,12 @@ So that <benefit/value>
 - Implement unit tests for each component
 - Create integration tests for feature workflow
 - Add edge case tests
+- **[If agent feature]** Test decision tree logic against PRD scenarios
 - Validate against acceptance criteria
 
 ---
 
 ## VALIDATION STRATEGY
-
-> Define what the validation system should test for THIS phase specifically.
 
 ### Tools to Validate
 
@@ -381,17 +462,13 @@ So that <benefit/value>
 |----------|------------|-------------|---------------|
 | [Name] | [Steps to verify] | [Error cases] | [State to check] |
 
-### Integration Points
+### PRD Scenario Validation
 
-List external services touched by this phase:
-- **[Service]**: What operations, how to verify connectivity
-- Note any rate limits or test account requirements
+[If PRD exists] Map implementation to each scenario in PRD Section 4.3:
 
-### Mock Data Needs
-
-| Scenario | Data Shape | Edge Cases |
-|----------|------------|------------|
-| [Scenario] | [Fields needed] | [Empty/error/timeout/malformed] |
+| Scenario | Test Plan | Pass Criteria |
+|---|---|---|
+| [Scenario from PRD 4.3] | [How to test this scenario] | [PRD acceptance criterion] |
 
 ### Validation Acceptance Criteria
 
@@ -400,6 +477,8 @@ List external services touched by this phase:
 - [ ] All workflow happy paths complete successfully
 - [ ] All documented error paths are handled
 - [ ] Integration points are reachable (or gracefully fail)
+- [ ] **[If agent feature]** All decision trees return expected outcomes per PRD
+- [ ] **[If using technology]** Technology integration matches profile specification
 
 ---
 
@@ -422,6 +501,7 @@ Use information-dense keywords for clarity:
 
 - **IMPLEMENT**: {Specific implementation detail}
 - **PATTERN**: {Reference to existing pattern - file:line}
+- **PROFILE**: {Reference to technology profile endpoint/pattern if applicable}
 - **IMPORTS**: {Required imports and dependencies}
 - **GOTCHA**: {Known issues or constraints to avoid}
 - **VALIDATE**: `{executable validation command}`
@@ -444,9 +524,13 @@ Design unit tests with fixtures and assertions following existing testing approa
 
 <Scope and requirements based on project standards>
 
+**[If agent feature]** Include tests that verify decision tree outcomes match PRD Section 4.2
+
 ### Edge Cases
 
 <List specific edge cases that must be tested for this feature>
+
+**[If using technology]** Include edge cases mentioned in technology profile (rate limit handling, auth failures, etc)
 
 ---
 
@@ -481,7 +565,7 @@ npm run format:check
 
 ### Level 4: Manual Validation
 
-<Feature-specific manual testing steps - API calls, UI testing, etc.>
+<Feature-specific manual testing steps - API calls, UI testing, PRD scenario verification, etc.>
 
 ### Level 5: Additional Validation (Optional)
 
@@ -502,6 +586,8 @@ npm run format:check
 - [ ] Documentation is updated (if applicable)
 - [ ] Performance meets requirements (if applicable)
 - [ ] Security considerations addressed (if applicable)
+- [ ] **[If agent feature]** All PRD Section 4.3 scenarios pass as acceptance criteria
+- [ ] **[If using technology]** External API integration works per technology profile
 
 ---
 
@@ -509,12 +595,7 @@ npm run format:check
 
 - [ ] All tasks completed in order
 - [ ] Each task validation passed immediately
-- [ ] All validation commands executed successfully:
-  - [ ] Level 1: type-check, lint, format:check
-  - [ ] Level 2: test, test with coverage
-  - [ ] Level 3: build, dist/ verification
-  - [ ] Level 4: Manual script testing
-  - [ ] Level 5: Config validation
+- [ ] All validation commands executed successfully
 - [ ] Full test suite passes (unit + integration)
 - [ ] No linting errors (npm run lint)
 - [ ] No formatting errors (npm run format:check)
@@ -527,7 +608,7 @@ npm run format:check
 
 ## NOTES
 
-<Additional context, design decisions, trade-offs>
+<Additional context, design decisions, trade-offs, decisions from Phase 0 scope analysis>
 ```
 
 ## Output Format
@@ -590,6 +671,7 @@ The plan must contain ONLY valuable, actionable information. Every line must ear
 - [ ] Integration points clearly mapped
 - [ ] Gotchas and anti-patterns captured
 - [ ] Every task has executable validation command
+- [ ] Technology profiles integrated and referenced in tasks
 
 ### Implementation Ready ✓
 
@@ -597,6 +679,7 @@ The plan must contain ONLY valuable, actionable information. Every line must ear
 - [ ] Tasks ordered by dependency (can execute top-to-bottom)
 - [ ] Each task is atomic and independently testable
 - [ ] Pattern references include specific file:line numbers
+- [ ] Technology profile endpoints referenced where applicable
 
 ### Pattern Consistency ✓
 
@@ -604,6 +687,7 @@ The plan must contain ONLY valuable, actionable information. Every line must ear
 - [ ] New patterns justified with clear rationale
 - [ ] No reinvention of existing patterns or utils
 - [ ] Testing approach matches project standards
+- [ ] Agent behavior matches PRD decision trees and scenarios
 
 ### Information Density ✓
 
@@ -611,6 +695,7 @@ The plan must contain ONLY valuable, actionable information. Every line must ear
 - [ ] URLs include section anchors when applicable
 - [ ] Task descriptions use codebase keywords
 - [ ] Validation commands are non interactive executable
+- [ ] Technology constraints documented from profiles
 
 ## Success Metrics
 
@@ -619,6 +704,8 @@ The plan must contain ONLY valuable, actionable information. Every line must ear
 **Validation Complete**: Every task has at least one working validation command
 
 **Context Rich**: The Plan passes "No Prior Knowledge Test" - someone unfamiliar with codebase can implement using only Plan content
+
+**Technology Integration**: External API/platform integration clearly specified from technology profiles
 
 **Confidence Score**: #/10 that execution will succeed on first attempt
 
@@ -631,6 +718,7 @@ After creating the Plan, provide:
 - **Summary**: Brief description of feature and approach
 - **Complexity**: Low/Medium/High
 - **Risks**: Key implementation considerations
+- **Technology Integration**: [List of `.agents/reference/` profiles consumed, if any]
+- **Agent Behavior**: [Yes/No - does this implement agent decision trees?]
 - **Confidence**: X/10 for one-pass success
-
-**Do not submit the report until line count is verified within 500-750 range.**
+- **Next Step**: → Run `/execute .agents/plans/{plan-file}.md` to begin implementation

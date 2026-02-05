@@ -1,820 +1,619 @@
 ---
-description: "Intelligent post-implementation validation with subagent coordination"
-argument-hint: [plan-file-path]
+description: "Scenario-based agent validation that tests all user flows, capabilities, and error paths"
+argument-hint: [plan-file-path] [--full]
 ---
 
-# Validate Implementation
+# Validate Implementation: Scenario-Based Agent Validation
 
 ## Overview
 
-Validates implemented features from the user's perspective. Coordinates specialized subagents to test tools, workflows, integrations, and error handling. Produces actionable reports with fix suggestions.
+**Goes beyond code health checks.** Tests every user flow, tool capability, decision tree, and error recovery path defined in the PRD. Validates that the agent behaves correctly across all scenarios, not just that the code compiles.
 
-**Philosophy**: Code tests (lint, pytest) validate code runs. This command validates the feature *works* - from a user's perspective.
+**Three validation sources:**
+1. **Plan file** → VALIDATION COMMANDS section (code-level checks)
+2. **PRD Section 4.3** → Scenario definitions (agent behavior checks)
+3. **Technology profiles** → Validation hooks from `.agents/reference/` (integration checks)
+
+**Philosophy**: Static analysis tells you code *looks* right. Functional testing proves it *runs*. Scenario validation proves the agent *behaves correctly*.
 
 ## Arguments
 
-**Plan file**: `$ARGUMENTS`
-- If provided: Use specified plan file
-- If empty: Use most recent `.md` file in `.agents/plans/`
+- `$ARGUMENTS`: Plan file path (optional, defaults to most recent in `.agents/plans/`)
+- `--full`: Run all levels including full pipeline end-to-end (slower, may cost API credits)
+
+**Default runs Level 1 + Level 2 + Level 3** (syntax + components + scenarios)
+**With --full: adds Level 4** (full pipeline end-to-end)
 
 ---
 
-## Orchestration Phases
+## Architecture
 
-| Phase | Agent(s) | Purpose |
-|-------|----------|---------|
-| 0 | Orchestrator | Load context from PRD/plan |
-| 1 | Tool Validator + Mock Generator | Test tools, create mocks (parallel) |
-| 2 | Workflow Validator | Test user story paths |
-| 3 | Integration Tester | Test real services |
-| 4 | Error Path Tester | Test failure handling |
-| 5 | Orchestrator | Synthesize report |
+```
+Phase 0: Context Loading
+    │
+    ├── Read plan file → Extract VALIDATION COMMANDS
+    ├── Read PRD → Extract Section 4.3 Scenario Definitions
+    ├── Read PRD → Extract Section 4.4 Error Recovery Patterns
+    └── Read technology profiles → Extract Validation Hooks (Section 9)
 
-**CRITICAL:** Phases 1-4 should use the Task tool to spawn subagents. Phase 1 agents MUST be spawned in parallel (same message, multiple Task calls). This reduces total validation time significantly.
+Phase 1: Static Analysis (Quick)
+    │
+    └── Brief code review for obvious issues
+
+Phase 2: Code Validation
+    │
+    ├── Level 1: Syntax/lint/type checks
+    └── Level 2: Unit + component tests
+
+Phase 3: Scenario Validation ← THE KEY PHASE
+    │
+    ├── Test each PRD scenario (Section 4.3)
+    ├── Test decision tree outcomes (Section 4.2)
+    ├── Test error recovery paths (Section 4.4)
+    └── Test technology integration hooks
+
+Phase 4: Full Pipeline (--full only)
+    │
+    └── End-to-end agent run with real/mock inputs
+```
 
 ---
 
 ## Phase 0: Context Loading
 
-### Step 1: Locate Plan File
+### Step 1: Locate Plan
 
 ```bash
-# If $ARGUMENTS provided, use it
-# Otherwise, find most recent plan:
-ls -t .agents/plans/*.md | head -1
+# If $ARGUMENTS provided (excluding flags), use it
+# Otherwise find most recent:
+ls -t .agents/plans/*.md 2>/dev/null | head -1
 ```
 
-### Step 2: Read Plan
+### Step 2: Load Validation Sources
 
-Extract from the plan file:
-- **Feature description**: What was built
-- **User story**: Who benefits and how
-- **Acceptance criteria**: What must be verified
-- **Tools implemented**: List of tools/functions added
-- **Workflows added**: User-facing paths through the feature
-- **Validation Strategy section**: If present, use as primary test guide
+**From Plan File:**
+- Read `## VALIDATION COMMANDS` section → Parse into Levels 1-5
+- Read `## ACCEPTANCE CRITERIA` section → Extract criteria list
 
-### Step 3: Read PRD Phase (If Available)
+**From PRD (if exists):**
+- Read `## 4. Agent Behavior Specification`
+- Extract Section 4.3: Scenario Definitions (all scenarios with Given/When/Then/Error/Edge)
+- Extract Section 4.2: Decision Trees (expected decision outcomes)
+- Extract Section 4.4: Error Recovery Patterns (expected recovery behaviors)
 
-Check for PRD at `.agents/PRD.md` or `PRD*.md` in project root:
-- Identify phase from plan or PRD "Current Focus"
-- Extract user stories (US-XXX) for this phase
-- Extract acceptance criteria per story
-- Extract Agent Validation Profile if present (services, workflows, error scenarios)
+**From Technology Profiles (if exist):**
+- Check `.agents/reference/` for `*-profile.md` files
+- From each relevant profile, read Section 9: Validation Hooks
+- Extract health checks, smoke tests, and mock strategies
 
-**Note:** Agent Validation Profile is optional. Projects created before the validation framework may not have this section. In that case, infer testing requirements from:
-- User stories and acceptance criteria in the PRD
-- Tools/workflows listed in the plan
-- Service detection from .env and imports
+### Step 3: Build Validation Matrix
 
-### Step 4: Output Context Summary
+Combine all sources into a validation matrix:
 
 ```
-## Validation Context
+## Validation Starting
 
 **Feature**: [Name from plan]
-**Plan**: [Path to plan file]
-**PRD Phase**: [N - Name] (or "No PRD found")
-**User Stories**: US-XXX, US-XXX (or "From plan only")
+**Plan**: [path]
+**PRD Available**: [Yes/No]
+**Technology Profiles**: [list or "none"]
 
-### Tools to Test
-| Tool | Expected Behavior |
-|------|-------------------|
-| [Tool name] | [What it should do] |
+### Validation Commands (from Plan)
+- Level 1 (Syntax): [N] commands
+- Level 2 (Components): [N] commands
 
-### Workflows to Test
-| Workflow | User Story | Path |
-|----------|------------|------|
-| [Name] | US-XXX | [Steps] |
+### Scenario Validation (from PRD Section 4.3)
+- Happy path scenarios: [N]
+- Error recovery scenarios: [N]
+- Edge case scenarios: [N]
+- Integration failure scenarios: [N]
+
+### Technology Validation (from Profiles)
+- Health checks: [N]
+- Smoke tests: [N]
 
 ### Acceptance Criteria
-- [ ] [Criterion from plan/PRD]
-- [ ] [Criterion from plan/PRD]
-
-### Detected Services
-[Output from Service Auto-Detection]
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
 
 ---
-Context loaded. Proceeding to validation phases...
+Proceeding to validation...
 ```
 
 ---
 
-## Service Auto-Detection
+## Phase 1: Static Analysis (Brief)
 
-### Detection Process
+**Quick code review - max 5 minutes, max 10 tool calls**
 
-**Priority Order:**
+Read up to 3 key files mentioned in the plan and check for:
+- Missing error handling (especially for error recovery paths in PRD 4.4)
+- Obvious bugs or unimplemented functions (TODO/FIXME)
+- Decision tree logic that doesn't match PRD Section 4.2
 
-1. **Check `.agents/services.yaml`** (manual override)
-   ```bash
-   cat .agents/services.yaml 2>/dev/null
-   ```
-
-2. **Scan `.env` file** for service patterns
-   ```bash
-   grep -E "^[A-Z_]*(API_KEY|URL|TOKEN|SECRET|DATABASE)" .env 2>/dev/null
-   ```
-   Patterns: `*_API_KEY`, `*_URL`, `*_TOKEN`, `DATABASE_URL`, `OPENAI_*`, `ANTHROPIC_*`, `SUPABASE_*`
-
-3. **Scan imports** for service SDKs
-   ```bash
-   grep -rh "import.*openai\|from openai\|import.*supabase\|from supabase\|import.*anthropic" --include="*.py" --include="*.ts" --include="*.js" 2>/dev/null | head -10
-   ```
-
-### Detection Output
-
-```
-## Detected Services
-
-| Service | Source | Auth Env Var | Status |
-|---------|--------|--------------|--------|
-| OpenAI | .env | OPENAI_API_KEY | ⚪ Pending |
-| Supabase | import | SUPABASE_URL | ⚪ Pending |
-| Custom API | services.yaml | MY_API_KEY | ⚪ Pending |
-
-[If no services found]: "No external services detected. Skipping Phase 3 (Integration Testing)."
-```
+Output brief findings before running tests.
 
 ---
 
-## Subagent: Tool Validator
+## Phase 2: Code Validation
 
-**Spawn using Task tool with this prompt:**
+### Level 1: Syntax Validation
+
+**Always run.** Execute each command from plan's Level 1:
 
 ```
-You are a Tool Validator for: [Feature Name]
-
-## Context
-[Insert relevant context from Phase 0]
-
-## Tools to Test
-[List from context with expected behavior]
-
-## Your Process
-
-For EACH tool:
-
-1. **Test Valid Inputs (Happy Path)**
-   - Construct realistic valid inputs based on expected usage
-   - Execute the tool
-   - Verify output matches expected behavior
-
-2. **Test Invalid Inputs**
-   - Missing required parameters
-   - Wrong types (string where number expected)
-   - Out-of-range values
-
-3. **Test Edge Cases**
-   - Empty strings, null values
-   - Very large inputs
-   - Unicode/special characters
-   - Boundary conditions
-
-## Output Format
-
-For each tool, report:
-
-### [Tool Name]
-**Status**: 🟢 Pass | 🟡 Partial | 🔴 Fail
-
-**Valid Input Tests:**
-- ✅ [Test case]: [Result]
-- ✅ [Test case]: [Result]
-
-**Invalid Input Tests:**
-- ✅ Handles missing param: Returns helpful error
-- ❌ Type error not caught: Crashes instead of error message
-
-**Edge Cases:**
-- ⚠️ Empty string: [Unexpected behavior]
-- ✅ Large input: Handled correctly
-
-**Issues Found:**
-1. [Issue description]
-   **Where**: [File:line if identifiable]
-   **Fix**:
-   ```[lang]
-   [Suggested code fix]
-   ```
-
----
-Return your complete tool validation report.
+Running: `[command]`
+✅ PASS: `[command]` (exit code 0)
 ```
+or
+```
+❌ FAIL: `[command]` (exit code 1)
+Error: [error details]
+```
+
+**Stop validation if Level 1 fails** - no point testing broken code.
+
+### Level 2: Component Validation
+
+**Always run.** Execute each command from plan's Level 2.
+
+**Handle interactive commands:** Mark as "VERIFY MANUALLY"
+**Handle timeouts:** 60 second timeout, mark as ⚠️ TIMEOUT
 
 ---
 
-## Subagent: Mock Generator
+## Phase 3: Live Integration Testing & Scenario Validation
 
-**Spawn using Task tool with this prompt:**
+> **THE CORE PHASE - Tests real API integrations AND agent behavior against PRD scenarios.**
+> Uses the four-tier testing classification from technology profiles (Section 9).
 
-```
-You are a Mock Generator for: [Feature Name]
+### Step 1: Tier 1 — Auto-Live Health Checks (No Approval)
 
-## Services Detected
-[List from Service Auto-Detection]
-
-## Your Process
-
-For EACH detected service:
-
-1. **Analyze Integration Code**
-   - Find where service is called in codebase
-   - Identify response schemas from type hints or actual usage
-   - Note error handling patterns
-
-2. **Generate Mock Scenarios**
-   Create these scenarios for each service:
-   - `success`: Typical successful response
-   - `empty`: Valid but empty response (empty array, null data)
-   - `error_400`: Bad request response
-   - `error_401`: Unauthorized response
-   - `error_403`: Forbidden response
-   - `error_404`: Not found response
-   - `error_500`: Server error response
-   - `timeout`: Simulated timeout
-   - `malformed`: Invalid JSON or unexpected structure
-
-3. **Save Mocks**
-   Write to `.agents/mocks/[service-name].json`:
-   ```json
-   {
-     "service": "[name]",
-     "scenarios": {
-       "success": { ... },
-       "empty": { ... },
-       "error_400": { "status": 400, "body": { "error": "..." } },
-       ...
-     }
-   }
-   ```
-
-## Output Format
-
-### Mock Summary
-
-| Service | Scenarios Generated | File |
-|---------|--------------------:|------|
-| OpenAI | 9 | `.agents/mocks/openai.json` |
-| Supabase | 9 | `.agents/mocks/supabase.json` |
-
-**Notes:**
-- [Any observations about response schemas]
-- [Any missing type information]
-
----
-Create the mock files and return your summary.
-```
-
----
-
-## Subagent: Workflow Validator
-
-**Spawn using Task tool with this prompt:**
+Execute ALL Tier 1 tests from every relevant technology profile automatically.
+These are read-only, zero-cost operations that verify connectivity and auth.
 
 ```
-You are a Workflow Validator for: [Feature Name]
+### Tier 1: Live Integration Health Checks
 
-## User Stories to Test
-[List with acceptance criteria from Phase 0]
+[Technology Name]:
+  Endpoint: GET /[endpoint]
+  Running: [health check command from profile Section 9.1]
+  Response: [actual response summary]
+  Schema: [fields match / fields missing]
+  ✅ HEALTHY | ❌ UNREACHABLE | ⚠️ AUTH FAILED
 
-## Available Mocks
-[List from Mock Generator output]
-
-## Your Process
-
-For EACH user story:
-
-1. **Map Workflow Paths**
-   - Identify the happy path (main success flow)
-   - Identify decision points where flow can branch
-   - Identify error paths (what happens when things fail)
-
-2. **Test Happy Path**
-   - Walk through each step
-   - Verify state changes correctly
-   - Check final outcome matches acceptance criteria
-
-3. **Test Error Paths**
-   - Use mocks to simulate failures
-   - Verify graceful degradation
-   - Check error messages are helpful
-
-4. **Verify Acceptance Criteria**
-   - Check each criterion explicitly
-   - Mark as verified or failed
-
-## Output Format
-
-### US-XXX: [Story Title]
-
-**Status**: 🟢 Pass | 🟡 Partial | 🔴 Fail
-
-**Happy Path:**
-```
-Step 1: [Action] → ✅ [Result]
-Step 2: [Action] → ✅ [Result]
-Step 3: [Action] → ⚠️ [Unexpected but not failure]
-Final: [Outcome]
+[Next Technology]:
+  ...
 ```
 
-**Error Paths:**
-- ✅ Service unavailable: Shows retry message
-- ❌ Invalid input: Crashes (should show validation error)
-- ✅ Auth failure: Redirects to login
+**If Tier 1 fails for a technology:**
+- Mark ALL scenarios depending on that technology as ⚠️ DEGRADED
+- Continue with other technologies
+- Attempt mock fallback for dependent scenarios if fixtures exist
 
-**Acceptance Criteria:**
-- [x] User can [action] - Verified
-- [ ] System handles [case] - **FAILED**: [What actually happens]
+### Step 2: Tier 2 — Auto-Live with Test Data (No Approval)
 
-**Issues Found:**
-1. [Issue]: [Description]
-   **Fix**: [Suggested approach]
-
----
-Return your complete workflow validation report.
-```
-
----
-
-## Subagent: Integration Tester
-
-**Spawn using Task tool with this prompt:**
+Execute ALL Tier 2 tests automatically using pre-defined test data from profiles.
+These have controlled side effects with automatic cleanup.
 
 ```
-You are an Integration Tester for: [Feature Name]
+### Tier 2: Live Tests with Test Data
 
-## Services to Test
-[List from detection with auth env vars]
+[Technology Name] - [Operation]:
+  Endpoint: POST /[endpoint]
+  Test data: [summary of test input - e.g., "PIV_TEST_ prefixed campaign"]
+  Response: [actual response]
+  Schema valid: ✅ / ❌
 
-## Your Process
-
-For EACH service:
-
-1. **Verify Credentials**
-   - Check env var exists: `echo $VAR_NAME | head -c 5`
-   - Verify non-empty (first 5 chars only for security)
-
-2. **Test Authentication**
-   - Make minimal API call that verifies auth works
-   - Examples: OpenAI `/models`, Supabase health check
-
-3. **Test Operations**
-   - **Read**: Fetch data that should exist
-   - **Write**: Create test data (if safe), then clean up
-   - Skip destructive operations
-
-4. **Handle Issues Gracefully**
-   - Rate limits: Log warning, don't fail
-   - Unavailable: Note as "Mock Only", continue
-   - Auth failure: Log as critical issue
-
-## Output Format
-
-### [Service Name]
-
-**Status**: 🟢 Connected | 🟡 Mock Only | 🔴 Failed
-
-**Credential Check:**
-- Env var `[VAR]`: ✅ Present | ❌ Missing
-
-**Authentication:**
-- ✅ Auth successful | ❌ Auth failed: [Error]
-
-**Operations:**
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| Read | ✅/❌/⚪ | [Details] |
-| Write | ✅/❌/⚪ | [Details or "Skipped"] |
-
-**Issues:**
-- [Issue]: [Description and fix]
-
----
-Return your complete integration test report.
+  Cleanup: [DELETE /endpoint/{id}]
+  Cleanup result: ✅ CLEANED | ❌ CLEANUP FAILED (manual cleanup needed)
 ```
 
----
+**Test data sourcing:**
+- Read test configuration from profile Section 9.1 (Tier 2 table)
+- Environment variables (PIV_TEST_EMAIL, etc.) must be set in .env
+- If env vars missing: WARN and skip Tier 2 for that technology
 
-## Subagent: Error Path Tester
+**Cleanup is mandatory:** Always run cleanup procedures after Tier 2 tests, even if the test itself failed. Cleanup must be idempotent.
 
-**Spawn using Task tool with this prompt:**
+### Step 3: Tier 3 — Approval-Required Live Tests (Human in the Loop)
+
+For each Tier 3 endpoint in the technology profiles, present the user with an approval prompt BEFORE executing. **Never auto-execute Tier 3 tests.**
 
 ```
-You are an Error Path Tester for: [Feature Name]
+### Tier 3: Approval-Required Tests
 
-## Error Scenarios to Test
-[From PRD Agent Validation Profile or inferred from feature]
+🔔 [Technology Name] - [Operation]
 
-## Available Mocks
-[Error scenario mocks from Mock Generator]
+  To validate: [which PRD scenario this tests]
+  Action: [METHOD /endpoint] with [test input description]
+  Cost: [estimated cost from profile]
+  Effect: [what happens - credits consumed, record created, etc.]
+  Cleanup: [auto / manual / none]
+  Last recorded: [date of existing fixture, or "no fixture"]
 
-## Your Process
+  → User chose: APPROVE / USE FIXTURE / SKIP
 
-Test these error categories:
+  [If APPROVED]:
+    Response: [actual response]
+    Schema valid: ✅ / ❌
+    Fixture saved: .agents/fixtures/[tech]-[endpoint].json
+    ✅ PASS | ❌ FAIL
 
-1. **Service Unavailable**
-   - Simulate timeout/connection failure
-   - Does the system degrade gracefully?
-   - Is the user informed appropriately?
+  [If FIXTURE]:
+    Loaded: .agents/fixtures/[tech]-[endpoint].json (recorded [date])
+    Agent processed fixture: [result]
+    ✅ PASS (fixture) | ❌ FAIL (fixture)
 
-2. **Invalid Input**
-   - Malformed data, wrong types
-   - Are errors caught before hitting services?
-   - Are error messages helpful?
-
-3. **Authentication Failures**
-   - Expired tokens, invalid credentials
-   - Is the user directed to re-authenticate?
-   - Are failures logged appropriately?
-
-4. **Rate Limiting**
-   - 429 responses
-   - Is there backoff logic?
-   - Does the system eventually succeed?
-
-5. **Unexpected Responses**
-   - Malformed JSON
-   - Missing expected fields
-   - Does the system handle gracefully?
-
-## Output Format
-
-### Error Handling Summary
-
-**Overall**: 🟢 Robust | 🟡 Gaps | 🔴 Fragile
-
-| Category | Status | Details |
-|----------|--------|---------|
-| Service Unavailable | ✅/❌ | [How it handles] |
-| Invalid Input | ✅/❌ | [How it handles] |
-| Auth Failures | ✅/❌ | [How it handles] |
-| Rate Limits | ✅/❌ | [How it handles] |
-| Malformed Response | ✅/❌ | [How it handles] |
-
-### Unhandled Errors
-
-1. **[Error Type]**
-   - **What Happens**: [Current behavior]
-   - **Expected**: [What should happen]
-   - **Fix**:
-   ```[lang]
-   [Suggested code]
-   ```
-
----
-Return your complete error path test report.
+  [If SKIPPED]:
+    ⏭️ SKIPPED by user
 ```
+
+**Approval interaction:**
+- Present ALL Tier 3 tests at once so user can batch approve/skip
+- For each, show: endpoint, cost, effect, and which scenario it validates
+- Accept: approve all, skip all, or individual decisions
+- Record user decisions in validation report
+
+**Response recording:**
+When user approves a live Tier 3 call:
+1. Execute the call and capture full response
+2. Save to `.agents/fixtures/{technology}-{endpoint-name}.json`
+3. Include timestamp, request, and response
+4. On future runs, offer recorded fixture as alternative to fresh call
+
+### Step 4: Tier 4 — Mock-Only Tests (Automatic)
+
+Load fixtures for Tier 4 endpoints and feed responses into agent logic.
+Tests that the agent correctly processes responses, not that the API works.
+
+```
+### Tier 4: Mock-Based Validation
+
+[Technology Name] - [Operation]:
+  Fixture: .agents/fixtures/[tech]-[endpoint].json
+  Agent behavior: [what agent did with the fixture data]
+  Decision tree: [which PRD 4.2 decision was triggered]
+  Expected outcome: [from PRD]
+  Actual outcome: [what happened]
+  ✅ PASS | ❌ FAIL
+```
+
+**If fixture doesn't exist:**
+- WARN: "No fixture for [endpoint]. Create one by running Tier 3 approval test first, or manually add fixture."
+- Mark as ⚠️ NO FIXTURE
+
+### Step 5: PRD Scenario Validation
+
+Now test full agent scenarios from PRD Section 4.3 using the integration results from Steps 1-4.
+
+For each scenario, the integration tier determines how it's tested:
+
+```
+### Scenario: [Name] (PRD 4.3)
+
+Given: [Initial state from PRD]
+APIs involved: [Technology A (Tier 1), Technology B (Tier 3)]
+Integration status: [All APIs healthy / degraded / mocked]
+
+When: [Trigger action]
+Execute: [Command to trigger the agent workflow]
+
+Then: [Expected outcome from PRD]
+Verify: [Check output, state changes, API calls made]
+
+Result: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL (some APIs mocked)
+Details: [What happened, which tiers were live vs mocked]
+```
+
+**Scenario categories:**
+
+**Happy paths** — Test with maximum live integration (Tiers 1-3 where approved):
+- Agent receives real API responses and processes them correctly
+- Verify full decision tree execution with real data shapes
+
+**Error recovery** — Simulate errors using mocks even for live APIs:
+- Override Tier 1/2 responses with error fixtures to test recovery
+- Verify agent handles timeouts, rate limits, auth failures per PRD Section 4.4
+
+**Edge cases** — Test with unusual inputs and boundary conditions:
+- Feed edge case data to agent logic
+- Verify graceful handling per PRD scenarios
+
+### Step 6: Decision Tree Verification
+
+For each decision tree in PRD Section 4.2, verify with real data where possible:
+
+```
+### Decision Tree: [Name] (PRD 4.2)
+
+Data source: [Live Tier 1-3 response / Fixture / Mock]
+
+| Condition | Expected Action | Actual Action | Data Source | Status |
+|-----------|----------------|---------------|-------------|--------|
+| [Condition A] | [Action A] | [What happened] | [Live/Fixture] | ✅/❌ |
+| [Condition B] | [Action B] | [What happened] | [Live/Fixture] | ✅/❌ |
+| [Failure] | [Recovery] | [What happened] | [Mock error] | ✅/❌ |
+```
+
+### Agent Teams Mode (When Available)
+
+> Parallel validation across tiers and scenario categories.
+
+```
+Team Lead coordinates validation:
+├── Teammate 1: Tier 1-2 integration tests (Steps 1-2, auto)
+├── Teammate 2: Happy path scenarios (Step 5, after Tier 1-2 complete)
+├── Teammate 3: Error recovery + edge cases (Step 5)
+├── Lead: Handles Tier 3 approvals (Step 3 - requires user interaction)
+└── Lead: Decision tree verification + report (Step 6)
+```
+
+Tier 3 stays with the Lead because it requires human interaction. All other tiers parallelize across teammates.
 
 ---
 
-## Orchestration Execution
+## Phase 4: Full Pipeline (--full flag only)
 
-### Execution Flow
-
-```
-Phase 0: Context Loading
-    │
-    ├── Read plan file
-    ├── Read PRD (if exists)
-    ├── Detect services
-    └── Output context summary
-    ↓
-Phase 1: Tool Validator + Mock Generator (PARALLEL)
-    │
-    ├── Spawn Tool Validator → tool-report
-    └── Spawn Mock Generator → mocks created
-    ↓
-Phase 2: Workflow Validator (needs mocks)
-    │
-    └── Spawn with mocks → workflow-report
-    ↓
-Phase 3: Integration Tester (skip if no services)
-    │
-    └── Spawn with services → integration-report
-    ↓
-Phase 4: Error Path Tester (needs mocks)
-    │
-    └── Spawn with mocks → error-report
-    ↓
-Phase 5: Report Synthesis
-    │
-    ├── Combine all reports
-    ├── Write to file
-    └── Output terminal summary
-```
-
-### Progress Output
-
-Display and update throughout execution:
+**Only run if `--full` flag provided.** This may:
+- Make real API calls (cost money)
+- Take several minutes
+- Create actual output files
 
 ```
-## Validation Progress
+### Full Pipeline
 
-⚪ Phase 0: Context Loading
-⚪ Phase 1: Tool + Mock Validation
-⚪ Phase 2: Workflow Validation
-⚪ Phase 3: Integration Testing
-⚪ Phase 4: Error Path Testing
-⚪ Phase 5: Report Synthesis
+Running: `[end-to-end command]`
+⏳ Running... (this may take several minutes)
+✅ PASS: Agent completed successfully
+
+Verifying outputs...
+Running: `[output verification command]`
+✅ FOUND: [output file] ([size])
+✅ VALID: [format/quality details]
 ```
 
-Update status as each phase executes:
-- 🟡 In progress
-- 🟢 Complete
-- 🔴 Failed (but continue to next phase)
+### Output Verification
 
-### Error Handling
-
-If a subagent fails or times out:
-1. Log the error in progress output
-2. Mark phase as 🔴 Failed
-3. Continue to next phase
-4. Note partial results in final report
+After running commands, verify expected outputs:
+- Check output files exist and are valid
+- For media files: verify format with ffprobe or similar
+- For data files: verify schema and content
+- For API responses: verify response structure
 
 ---
 
-## Phase 5: Report Synthesis
+## Phase 5: Report
 
-### Report File Location
+### Write Report File
 
-`.agents/validation/{feature-name}-validation-{YYYY-MM-DD}.md`
-
-Example: `.agents/validation/intelligent-validation-validation-2026-02-03.md`
-
-### Report Structure
+Location: `.agents/validation/{feature-name}-{YYYY-MM-DD}.md`
 
 ```markdown
 # Validation Report: [Feature Name]
 
 **Date**: [YYYY-MM-DD]
-**Plan**: [path/to/plan.md]
-**PRD Phase**: [N - Name] (or "No PRD")
+**Mode**: Standard | Full
+**Duration**: [X] minutes
+**PRD Scenarios Tested**: [N] of [Total]
 
 ---
 
-## Executive Summary
+## Code Validation Results
 
-**Overall Status**: 🟢 Ready | 🟡 Issues Found | 🔴 Critical Failures
+### Level 1: Syntax
+| Command | Status | Details |
+|---------|--------|---------|
+| `[command]` | ✅ PASS | No errors |
 
-| Category | Status | Issues |
-|----------|--------|--------|
-| Tools | 🟢/🟡/🔴 | X issues |
-| Workflows | 🟢/🟡/🔴 | X issues |
-| Integrations | 🟢/🟡/🔴 | X issues |
-| Error Handling | 🟢/🟡/🔴 | X issues |
-
----
-
-## Acceptance Criteria Verification
-
-- [x] [Criterion] - Verified by [which test]
-- [ ] [Criterion] - **FAILED**: [reason]
+### Level 2: Components
+| Command | Status | Details |
+|---------|--------|---------|
+| `[command]` | ✅ PASS | [N] tests |
 
 ---
 
-## Tool Validation Results
+## Scenario Validation Results
 
-[Insert Tool Validator output]
+### Happy Paths
+| Scenario (PRD Ref) | Status | Details |
+|---------------------|--------|---------|
+| [Name] (SC-001) | ✅ PASS | [Brief] |
+
+### Error Recovery
+| Scenario (PRD Ref) | Status | Details |
+|---------------------|--------|---------|
+| [Name] (SC-005) | ✅ PASS | [Brief] |
+
+### Edge Cases
+| Scenario (PRD Ref) | Status | Details |
+|---------------------|--------|---------|
+| [Name] (SC-010) | ✅ PASS | [Brief] |
+
+### Decision Trees
+| Decision (PRD 4.2) | Branches Tested | Pass | Fail |
+|---------------------|-----------------|------|------|
+| [Name] | [N] | [N] | [N] |
+
+---
+
+## Technology Integration (Four-Tier Results)
+
+### Tier 1: Auto-Live Health Checks
+| Technology | Endpoint | Status | Details |
+|-----------|----------|--------|---------|
+| [Name] | GET /[endpoint] | ✅ HEALTHY | [Response summary] |
+
+### Tier 2: Auto-Live with Test Data
+| Technology | Operation | Status | Cleanup | Details |
+|-----------|-----------|--------|---------|---------|
+| [Name] | POST /[endpoint] | ✅ PASS | ✅ CLEANED | [Brief] |
+
+### Tier 3: Approval-Required
+| Technology | Operation | User Decision | Status | Fixture Saved |
+|-----------|-----------|---------------|--------|---------------|
+| [Name] | POST /[endpoint] | APPROVED | ✅ PASS | `.agents/fixtures/[file]` |
+| [Name] | POST /[endpoint] | SKIPPED | ⏭️ SKIP | N/A |
+
+### Tier 4: Mock-Only
+| Technology | Operation | Fixture Used | Agent Behavior | Status |
+|-----------|-----------|-------------|----------------|--------|
+| [Name] | POST /[endpoint] | `.agents/fixtures/[file]` | [Decision triggered] | ✅ PASS |
 
 ---
 
-## Workflow Validation Results
+## Acceptance Criteria
 
-[Insert Workflow Validator output]
-
----
-
-## Integration Test Results
-
-[Insert Integration Tester output]
+- [x] [Criterion] - **VERIFIED** (Level/Scenario)
+- [ ] [Criterion] - **MANUAL CHECK NEEDED**
 
 ---
 
-## Error Handling Results
+## Summary
 
-[Insert Error Path Tester output]
+**Overall**: 🟢 READY | 🟡 ISSUES | 🔴 BROKEN
 
----
-
-## Issues & Recommended Fixes
-
-### Critical (Must Fix)
-
-1. **[Issue Title]**
-   - **Category**: [Tool/Workflow/Integration/Error Handling]
-   - **Description**: [What's wrong]
-   - **Impact**: [Why it matters]
-   - **Fix**:
-   ```[lang]
-   [Code suggestion]
-   ```
-
-### Warnings (Should Fix)
-
-1. **[Issue]**: [Brief description and fix]
-
-### Notes (Consider)
-
-- [Observation or suggestion]
+| Category | Pass | Fail | Skip |
+|----------|------|------|------|
+| Syntax | [N] | [N] | [N] |
+| Components | [N] | [N] | [N] |
+| Happy Paths | [N] | [N] | [N] |
+| Error Recovery | [N] | [N] | [N] |
+| Edge Cases | [N] | [N] | [N] |
+| Decision Trees | [N] | [N] | [N] |
+| Tier 1 (Auto-Live) | [N] | [N] | [N] |
+| Tier 2 (Test Data) | [N] | [N] | [N] |
+| Tier 3 (Approval) | [N] | [N] | [N] |
+| Tier 4 (Mock) | [N] | [N] | [N] |
+| Pipeline (if --full) | [N] | [N] | [N] |
 
 ---
+
+## Issues Found
+
+[List any failures with details and suggested fixes]
 
 ## Next Steps
 
-- [ ] Fix critical issues listed above
-- [ ] Re-run validation: `/validate-implementation [plan-path]`
-- [ ] Once all 🟢: Ready for `/commit`
-
----
-
-## Validation Metadata
-
-- **Duration**: [X minutes]
-- **Subagents Used**: Tool Validator, Mock Generator, Workflow Validator, Integration Tester, Error Path Tester
-- **Mocks Generated**: [List files]
-- **Archon Available**: Yes/No
+[Based on results - ready for /commit or needs fixes]
 ```
 
 ### Terminal Summary
 
-After writing the report, output:
-
 ```
 ## Validation Complete
 
-**Report**: `.agents/validation/[filename].md`
+**Report**: `.agents/validation/[file].md`
 
-### Results Summary
+### Code Validation
+| Level | Results |
+|-------|---------|
+| Syntax | ✅ [N]/[N] passed |
+| Components | ✅ [N]/[N] passed |
 
-| Category | Status | Details |
-|----------|--------|---------|
-| Tools | 🟢 5/5 passed | All tools working |
-| Workflows | 🟡 3/4 passed | US-002 error path missing |
-| Integrations | 🟢 2/2 connected | OpenAI, Supabase OK |
-| Error Handling | 🔴 2 unhandled | Timeout, malformed |
+### Scenario Validation
+| Category | Results |
+|----------|---------|
+| Happy Paths | ✅ [N]/[N] |
+| Error Recovery | ✅ [N]/[N] |
+| Edge Cases | ✅ [N]/[N] |
+| Decision Trees | ✅ [N]/[N] branches |
 
-### Critical Issues
+### Technology Integration (Four Tiers)
+| Tier | Results |
+|------|---------|
+| Tier 1 (Auto-Live) | ✅ [N]/[N] healthy |
+| Tier 2 (Test Data) | ✅ [N]/[N] passed, [N]/[N] cleaned |
+| Tier 3 (Approval) | ✅ [N] approved, [N] skipped, [N] fixture |
+| Tier 4 (Mock) | ✅ [N]/[N] passed |
 
-1. [Brief issue] - Fix in [file]
-2. [Brief issue] - Fix in [file]
+### Acceptance Criteria
+✅ [N]/[N] verified
 
-### Action Required
-
-[If critical issues]: Fix issues above, then re-run `/validate-implementation`
-[If only warnings]: Review warnings, then proceed to `/commit`
-[If all green]: Ready for `/commit`
+### Next Steps
+→ Ready for `/commit` | Fix [N] issues first
 ```
 
 ---
 
-## Archon Integration (Optional)
+## Handling Failures
 
-### Check Availability
+### If Level 1 fails:
+Stop validation. Syntax errors must be fixed first.
 
-At start of validation, check if Archon MCP is available:
+### If Level 2 fails:
+Continue to scenario validation — component failures don't always block scenario testing.
 
-```
-mcp__archon__rag_get_available_sources()
-```
+### If scenarios fail:
+Document which scenarios failed and what the agent actually did vs. expected.
+Provide specific guidance: "PRD says agent should retry 3 times, but agent only retries once."
 
-If error: Log "Archon MCP not available - continuing without RAG support" and skip Archon features.
+### If technology integration fails:
+Check if service is reachable. If not, attempt mock mode.
+Document whether failure is agent code issue or external service issue.
 
-### During Integration Testing
+---
 
-If Archon available, query for service documentation:
+## Handling Different Project Types
 
-```
-mcp__archon__rag_search_knowledge_base(query="[service] API authentication")
-mcp__archon__rag_search_code_examples(query="[service] error handling patterns")
-```
-
-Use results to inform testing approach.
-
-### After Validation
-
-If Archon available, log validation results:
-
-```
-mcp__archon__manage_task("create",
-  title="Validation: [Feature Name]",
-  description="[Summary of results]",
-  status="done" if all_green else "review"
-)
+### Agent Projects (Claude SDK / Custom)
+```bash
+# Level 1: Syntax
+pnpm exec tsc --noEmit
+# Level 2: Components
+pnpm test
+# Level 3: Scenarios
+pnpm exec tsx -e "import('./src/agent').then(a => a.handleScenario(...))"
+# Level 4: Full pipeline
+pnpm dev agent -u "..." -a "..."
 ```
 
-### Fallback Behavior
-
-If Archon unavailable at any point:
-- Continue without RAG queries
-- Skip result logging
-- Note in report: "Archon integration: Not available"
+### Python Agent Projects
+```bash
+# Level 1: Syntax
+uv run ruff check .
+# Level 2: Components
+uv run pytest
+# Level 3: Scenarios
+uv run python -m agent.test_scenarios
+# Level 4: Full pipeline
+uv run python -m agent.main --input "..."
+```
 
 ---
 
 ## Usage
 
 ```bash
-# Validate specific plan
-/validate-implementation .agents/plans/my-feature.md
-
-# Validate most recent plan
+# Standard: Syntax + Components + Scenarios (Levels 1-3)
 /validate-implementation
-```
 
-### Typical Workflow
+# Standard with specific plan
+/validate-implementation .agents/plans/phase-2.md
 
-```
-/execute [plan]                    # Implement the feature
-    ↓
-/validate-implementation [plan]    # Validate it works
-    ↓
-[Fix any issues found]
-    ↓
-/validate-implementation [plan]    # Re-validate
-    ↓
-/commit                            # Ship it
+# Full: Includes end-to-end pipeline (Levels 1-4)
+/validate-implementation --full
+
+# Full with specific plan
+/validate-implementation .agents/plans/phase-2.md --full
 ```
 
 ---
 
 ## Completion Criteria
 
-Validation is complete when:
-- [ ] Context loaded from plan (and PRD if available)
-- [ ] Services detected (or noted as none)
-- [ ] All subagent phases executed (or failed gracefully)
-- [ ] Report written to `.agents/validation/`
-- [ ] Summary output to terminal
-- [ ] Next steps clearly stated
-
----
-
-## Error Reference
-
-| Error | Cause | Resolution |
-|-------|-------|------------|
-| "Plan not found" | Path incorrect or no plans exist | Check path, or run `/plan-feature` first |
-| "No PRD phase found" | PRD missing or phase not identified | Validates from plan only (acceptable) |
-| "Service auth failed" | Missing or invalid credentials | Check `.env` for required API keys |
-| "Subagent timeout" | Complex validation taking too long | Check report for partial results |
-| "Mock generation failed" | Can't analyze service responses | Check service integration code for types |
-| "Database not running" | Docker/container not started | Start Docker Desktop, then `docker-compose up -d` |
-| "Connection refused" | Service not available on expected port | Check if service is running: `docker ps`, `lsof -i :PORT` |
-| "No Agent Validation Profile" | PRD created before validation framework | Normal - validation proceeds using plan and detection |
-
----
-
-## Notes
-
-### Design Decisions
-
-1. **Single file with inline prompts**: Self-contained and portable to other projects
-2. **Parallel Phase 1**: Tool Validator and Mock Generator have no dependencies
-3. **Sequential Phases 2-4**: Each needs results from previous phases
-4. **Graceful degradation**: Failures don't stop validation, just note in report
-5. **Fix suggestions**: MVP suggests code, doesn't auto-apply
-6. **Optional Archon**: Enhances validation if available, works without it
-
-### When to Use This Command
-
-- After `/execute` completes a feature
-- Before `/commit` to verify quality
-- When debugging unexpected behavior
-- To document what works (and what doesn't)
-
-### What This Validates vs. What It Doesn't
-
-**Validates:**
-- Tools work with various inputs
-- Workflows complete successfully
-- Services are reachable
-- Errors are handled
-
-**Does NOT validate:**
-- Performance/load characteristics
-- Security vulnerabilities
-- UI/UX quality
-- Code style (use lint for that)
-
-### Real-World Testing Insights
-
-Based on testing against production agents (x-agent-v2):
-
-**Common Gaps Found:**
-1. **Rate limit handling** - APIs often miss 429-specific handling with retry_after
-2. **Auth error detection** - 401/403 errors often get generic messages instead of re-auth guidance
-3. **Quota exhaustion** - Service-specific quota errors (YouTube, OpenAI) need specific handling
-4. **Database unavailability** - Docker/container not running is a common blocker
-
-**Validation Command Learnings:**
-1. **Service detection works well** - .env scanning finds 90%+ of services
-2. **Workflow tracing is valuable** - Following code paths reveals integration issues
-3. **Error path testing is critical** - This is where most real issues are found
-4. **Mock Generator is lower priority** - Can skip if time-constrained; focus on Tool/Workflow/Error validators
-
-**Recommendations for Target Projects:**
-- Ensure Docker/database is running before validation
-- Have .env configured with all required credentials
-- Have at least one completed plan in .agents/plans/
-- PRD is helpful but not required - plan-only validation works
+- [ ] Plan read and validation commands extracted
+- [ ] PRD scenarios extracted (if PRD exists)
+- [ ] Technology profiles read (if they exist)
+- [ ] Level 1 commands executed (all must pass to continue)
+- [ ] Level 2 commands executed (failures noted)
+- [ ] Tier 1 auto-live health checks executed
+- [ ] Tier 2 auto-live tests with test data executed + cleanup run
+- [ ] Tier 3 approval-required tests presented to user (approved/skipped/fixture)
+- [ ] Tier 4 mock-only tests executed with fixtures
+- [ ] PRD scenario validation complete (happy paths, error recovery, edge cases)
+- [ ] Decision tree verification complete
+- [ ] Level 4 pipeline tested (if --full flag)
+- [ ] Report written with actual pass/fail results per tier
+- [ ] Acceptance criteria verified against scenarios
+- [ ] All PRD scenarios accounted for (tested or documented as untestable)

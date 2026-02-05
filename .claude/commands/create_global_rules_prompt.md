@@ -109,6 +109,49 @@ Create a `CLAUDE.md` file (or similar global rules file) following this structur
       - Plan generated with validated decisions baked in
     - This ensures plans are solid before execution begins
 
+14. **Agent Teams Playbook** (for projects using Agent Teams)
+    - Include this section if the project uses Claude Code Agent Teams for parallel execution
+    - Document the teammate roles available in this project:
+
+    **Teammate Roles:**
+
+    ```markdown
+    ### Implementer
+    - **Purpose**: Execute implementation tasks from plans
+    - **Tools**: Full codebase access, Bash, file operations
+    - **Context**: Receives task description + technology profiles + codebase analysis
+    - **Output**: Implemented code pushed to shared repo
+
+    ### Validator
+    - **Purpose**: Run scenario validation against PRD definitions
+    - **Tools**: Test runners, Bash, file read access
+    - **Context**: Receives PRD scenarios + plan acceptance criteria
+    - **Output**: Validation report with pass/fail per scenario
+
+    ### Researcher
+    - **Purpose**: Deep-dive technology documentation and patterns
+    - **Tools**: WebSearch, WebFetch, file write
+    - **Context**: Receives technology name + PRD capability requirements
+    - **Output**: Technology profile in `.agents/reference/`
+    ```
+
+    **Agent Teams Conventions:**
+    - Each teammate gets a clear, single responsibility
+    - Teammates coordinate through git push/pull on shared upstream
+    - Direct messaging for integration questions
+    - Lead coordinates but delegates implementation
+    - One team per session only (experimental limitation)
+
+    **When to Use Agent Teams:**
+    - `/execute` with 3+ independent tasks → parallel implementers
+    - `/research-stack` with 2+ technologies → parallel researchers
+    - `/validate-implementation` with many scenarios → parallel validators
+    **When NOT to Use Agent Teams:**
+    - Tasks with tight sequential dependencies
+    - Simple single-file changes
+    - Quick bug fixes
+    - When token budget is a concern (each teammate = full Claude instance)
+
 ## Process to Follow:
 
 ### For Existing Projects:
@@ -126,11 +169,11 @@ Create a `CLAUDE.md` file (or similar global rules file) following this structur
    - What is the primary purpose/domain?
    - Any specific technology preferences or requirements?
    - What scale/complexity? (simple, medium, enterprise)
+   - **Will this project use Agent Teams for parallel execution?**
 2. **After I answer, research best practices:**
-   - Search for 2025 best practices for the chosen tech stack
-   - Look up recommended project structures
-   - Find modern conventions and tooling recommendations
+   - Use WebSearch for current best practices matching the tech stack
 3. **Create global rules based on research and best practices**
+4. **Include Agent Teams Playbook** if the project will use Agent Teams
 
 ## Critical Requirements:
 

@@ -6,6 +6,8 @@ You are the orchestration agent responsible for coordinating the complete codeba
 ## Overview
 This orchestrator coordinates 7 specialist agents to analyze and plan the restructuring of a codebase into vertical slice architecture.
 
+**Agent Teams Mode**: When Agent Teams is available, phases with independent agents run in parallel. When not available, agents run sequentially as before.
+
 **Before running sub-agents, the orchestrator first primes itself with project understanding.**
 
 ## Phase 0: Prime Context (Run First)
@@ -27,9 +29,9 @@ tree -L 3 -I 'node_modules|__pycache__|.git|dist|build|.next|venv'
 - Read any PRD or architecture docs in `.agents/`, `PRPs/`, or `planning/`
 
 ### Step 3: Identify Key Entry Points
-- Frontend: `macro-tracker/app/page.tsx`, `macro-tracker/app/layout.tsx`
-- Backend: `api/main.py`
-- AI Agent: `api/agent/coach_agent.py`
+- Frontend: main app files (page.tsx, layout.tsx, App.tsx, etc.)
+- Backend: main server files (main.py, index.ts, app.py, etc.)
+- AI Agent: agent entry points if applicable
 
 ### Step 4: Check Current State
 ```bash
@@ -39,7 +41,7 @@ git status
 
 ### Step 5: Write Project Context
 
-After gathering this information, write a summary to `.claude/agent-outputs/project-context.md` with:
+Write a summary to `.claude/agent-outputs/project-context.md` with:
 
 ```markdown
 # Project Context
@@ -84,19 +86,12 @@ After gathering this information, write a summary to `.claude/agent-outputs/proj
 All agents have access to:
 
 ### Git Commands (via Bash)
-Use bash to run git commands directly:
 - `git log` for commit history
 - `git blame` for code ownership
 - `git log --since` for freshness checks
-- No MCP required - just run git commands
 
 ### Archon MCP (Documentation RAG)
-Provides up-to-date framework documentation:
-- Next.js App Router patterns and conventions
-- Pydantic AI agent architecture best practices
-- FastAPI route and dependency patterns
-- Supabase client and auth patterns
-- Use extensively to validate patterns against current best practices
+If available, provides up-to-date framework documentation.
 
 ## Your Sub-Agents
 
@@ -106,15 +101,14 @@ Provides up-to-date framework documentation:
 | `dependency-mapper` | Maps import/export relationships | `dependency-graph.json` |
 | `doc-auditor` | Evaluates documentation relevance | `doc-audit.json` |
 | `dead-code-detector` | Finds unused code | `dead-code-report.json` |
-| `frontend-analyzer` | Analyzes Next.js frontend | `frontend-report.json` |
-| `backend-analyzer` | Analyzes FastAPI backend | `backend-report.json` |
+| `frontend-analyzer` | Analyzes frontend framework | `frontend-report.json` |
+| `backend-analyzer` | Analyzes backend framework | `backend-report.json` |
 | `script-auditor` | Evaluates shell/PS scripts | `script-audit.json` |
 | `synthesizer` | Combines all reports | `final-migration-plan.json` + `MIGRATION_PLAN.md` |
 
 ## Execution Phases
 
 ### Phase 0: Prime Context (No Dependencies)
-Build project understanding BEFORE any analysis:
 
 ```
 ┌─────────────────────┐
@@ -128,7 +122,6 @@ Build project understanding BEFORE any analysis:
 **Execute Phase 0 steps above first, then proceed.**
 
 ### Phase 1: Foundation (Requires Phase 0)
-These agents can run first as they have no prerequisites:
 
 ```
 ┌─────────────────┐
@@ -136,11 +129,10 @@ These agents can run first as they have no prerequisites:
 └─────────────────┘
 ```
 
-**Run:** `/agents/file-inventory`
+**Run:** `file-inventory` agent
 **Wait for:** `file-inventory.json`
 
 ### Phase 2: Independent Analysis (Requires Phase 1)
-These agents only need the file inventory:
 
 ```
 ┌──────────────────┐  ┌─────────────────┐  ┌────────────────┐
@@ -148,13 +140,14 @@ These agents only need the file inventory:
 └──────────────────┘  └─────────────────┘  └────────────────┘
 ```
 
-**Run in sequence:**
-1. `/agents/dependency-mapper` → wait for `dependency-graph.json`
-2. `/agents/doc-auditor` → wait for `doc-audit.json`
-3. `/agents/script-auditor` → wait for `script-audit.json`
+**Agent Teams Mode:** Spawn 3 teammates, one per agent. All run simultaneously.
+
+**Sequential Mode:** Run in order:
+1. `dependency-mapper` → wait for `dependency-graph.json`
+2. `doc-auditor` → wait for `doc-audit.json`
+3. `script-auditor` → wait for `script-audit.json`
 
 ### Phase 3: Deep Analysis (Requires Phases 1 & 2)
-These agents need both file inventory and dependency graph:
 
 ```
 ┌────────────────────┐  ┌───────────────────┐  ┌───────────────────┐
@@ -162,13 +155,14 @@ These agents need both file inventory and dependency graph:
 └────────────────────┘  └───────────────────┘  └───────────────────┘
 ```
 
-**Run in sequence:**
-1. `/agents/dead-code-detector` → wait for `dead-code-report.json`
-2. `/agents/frontend-analyzer` → wait for `frontend-report.json`
-3. `/agents/backend-analyzer` → wait for `backend-report.json`
+**Agent Teams Mode:** Spawn 3 teammates, one per agent. All run simultaneously. Teammates can message each other when they discover cross-cutting issues.
+
+**Sequential Mode:** Run in order:
+1. `dead-code-detector` → wait for `dead-code-report.json`
+2. `frontend-analyzer` → wait for `frontend-report.json`
+3. `backend-analyzer` → wait for `backend-report.json`
 
 ### Phase 4: Synthesis (Requires All Above)
-The synthesizer reads all reports and produces the final plan:
 
 ```
 ┌──────────────┐
@@ -176,12 +170,16 @@ The synthesizer reads all reports and produces the final plan:
 └──────────────┘
 ```
 
-**Run:** `/agents/synthesizer`
+**Run:** `synthesizer` agent
 **Produces:** `final-migration-plan.json` + `MIGRATION_PLAN.md`
 
 ## Execution Instructions
 
-You will execute each agent by reading and following its prompt file, then producing its required output.
+### Agent Teams Detection
+
+Before starting, check if Agent Teams is available:
+- If available: Use parallel execution for Phases 2 and 3
+- If not available: Run all agents sequentially
 
 ### Step-by-Step Execution:
 
@@ -199,12 +197,14 @@ You will execute each agent by reading and following its prompt file, then produ
 
 2. **Announce Phase 2**
    - Say: "Starting Phase 2: Independent Analysis"
-   - Execute dependency-mapper, doc-auditor, script-auditor in sequence
+   - **Agent Teams**: Spawn 3 teammates for parallel execution
+   - **Sequential**: Execute dependency-mapper, doc-auditor, script-auditor in order
    - Confirm each output file is written
 
 3. **Announce Phase 3**
    - Say: "Starting Phase 3: Deep Analysis"
-   - Execute dead-code-detector, frontend-analyzer, backend-analyzer in sequence
+   - **Agent Teams**: Spawn 3 teammates for parallel execution
+   - **Sequential**: Execute dead-code-detector, frontend-analyzer, backend-analyzer in order
    - Confirm each output file is written
 
 4. **Announce Phase 4**
@@ -216,6 +216,8 @@ You will execute each agent by reading and following its prompt file, then produ
    - Summarize what was found
    - Point user to `MIGRATION_PLAN.md` for the full plan
    - Highlight the most important findings
+   - Report execution mode: Agent Teams (parallel) or Sequential
+   - Report time savings from parallelization if applicable
 
 ## Output Location
 All agent outputs go to: `.claude/agent-outputs/`
@@ -224,8 +226,9 @@ All agent outputs go to: `.claude/agent-outputs/`
 If an agent fails:
 1. Log the error
 2. Continue with other agents if possible
-3. Note in final synthesis which agents failed
-4. Provide partial results
+3. In Agent Teams mode: teammate failure doesn't block other teammates
+4. Note in final synthesis which agents failed
+5. Provide partial results
 
 ## Completion Criteria
 The orchestration is complete when:
@@ -242,8 +245,8 @@ The orchestration is complete when:
 
 ## Begin Orchestration
 
-Start by announcing the analysis plan, then execute Phase 1.
+Start by announcing the analysis plan, then execute Phase 0.
 
-Target codebase: Current project root (siphio-website)
+Target codebase: Current project root
 
 **Execute now.**

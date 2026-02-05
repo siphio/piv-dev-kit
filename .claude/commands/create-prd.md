@@ -1,15 +1,18 @@
 ---
-description: Create a Product Requirements Document from conversation
+description: Create an agent-native Product Requirements Document from conversation
 argument-hint: [output-filename]
 ---
 
-# Create PRD: Generate Product Requirements Document
+# Create PRD: Agent-Native Product Requirements Document
 
 ## Overview
 
-Generate a comprehensive Product Requirements Document (PRD) based on the current conversation context. The PRD serves two purposes:
+Generate a comprehensive Product Requirements Document (PRD) optimized for AI agent development. This PRD captures not just what the agent does, but how it thinks, decides, and recovers.
+
+The PRD serves three purposes:
 1. **Product truth** - Single source of requirements for stakeholders
 2. **AI context** - Reference document for `/plan-feature` after context resets
+3. **Validation contract** - Scenario definitions that `/validate-implementation` tests against
 
 ## Output File
 
@@ -19,14 +22,13 @@ Write the PRD to: `$ARGUMENTS` (default: `PRD.md`)
 
 **The PRD MUST be between 500-750 lines.**
 
-This constraint exists because:
 - Enables efficient human reading and validation
 - Avoids context bloat when loaded by AI assistants
 - Forces prioritization of essential information
 - Each phase must be self-contained for `/plan-feature` workflow
 
-**If exceeding 750 lines:** Trim API specifications, reduce examples, move detailed schemas to appendix references.
-**If under 500 lines:** Add more context to phases, expand discussion points, include more acceptance criteria.
+**If exceeding 750 lines:** Trim generic sections, reduce examples, compress non-agent sections.
+**If under 500 lines:** Expand agent behavior scenarios, add more decision paths, detail error recovery.
 
 ---
 
@@ -40,47 +42,108 @@ This constraint exists because:
 
 ---
 
-### **1. Executive Summary** (50-75 lines)
+### **1. Executive Summary** (40-60 lines)
 
 - Product overview (2-3 paragraphs, plain English)
-- Core value proposition
+- Core value proposition - what does this agent automate?
 - MVP goal statement (single sentence)
+- Agent type classification: Autonomous / Semi-autonomous / Assistive
 
 ---
 
-### **2. Mission & Principles** (25-40 lines)
+### **2. Agent Identity** (30-50 lines)
 
-- Mission statement
-- 3-5 core principles with brief explanations
+> **This section defines WHO the agent is, not just what it does.**
 
----
-
-### **3. Target Users** (30-50 lines)
-
-**Primary Persona:**
-- Who they are
-- Technical comfort level
-- Goals (3 bullets)
-- Pain points (3 bullets)
+- **Purpose**: One-sentence agent mission
+- **Personality & Tone**: How the agent communicates (formal/casual, verbose/concise)
+- **Decision Philosophy**: How the agent prioritizes competing objectives
+  - Example: "Prefer accuracy over speed. When uncertain, ask the user rather than guess."
+- **Autonomy Level**: What the agent does independently vs. what requires human approval
+- **Core Competencies**: 3-5 things this agent must excel at
 
 ---
 
-### **4. MVP Scope** (40-60 lines)
+### **3. Technology Decisions** (40-60 lines)
 
-**In Scope:**
-- ✅ Core functionality items
-- ✅ Group by category (Core, Technical, Integration)
+> **Captures the rationale from your conversation. Feeds directly into `/research-stack`.**
 
-**Out of Scope:**
-- ❌ Deferred features with brief reason
+For EACH external technology, API, or platform the agent will use:
+
+```markdown
+#### [Technology Name]
+
+**What**: [Brief description - e.g., "Email outreach automation platform"]
+**Why chosen**: [Rationale from conversation - why this over alternatives]
+**Agent needs from it**: [Specific capabilities the agent requires]
+  - [Capability 1]: [Brief description]
+  - [Capability 2]: [Brief description]
+**Integration approach**: [REST API / SDK / MCP tool / etc.]
+**Known constraints**: [Rate limits, pricing tiers, auth requirements mentioned in discussion]
+```
+
+**IMPORTANT**: This section captures INTENT and RATIONALE. Deep API documentation is produced by `/research-stack` after the PRD.
 
 ---
 
-### **5. User Stories** (80-120 lines)
+### **4. Agent Behavior Specification** (80-120 lines)
+
+> **MANDATORY for all agent projects. This is the most important section of the PRD. It defines how the agent thinks and acts, and directly feeds into validation.**
+
+#### 4.1 Tool Orchestration
+
+| Tool/Capability | Purpose | When Used | Fallback If Unavailable |
+|----------------|---------|-----------|------------------------|
+| [Tool Name] | [What it does] | [Trigger condition] | [What happens instead] |
+
+#### 4.2 Decision Trees
+
+Document key decision points the agent faces:
+
+```markdown
+**Decision: [Decision Name]**
+- IF [condition A] → [action A]
+- ELSE IF [condition B] → [action B]
+- ELSE → [default action]
+- ON FAILURE → [recovery action]
+```
+
+Include 3-5 critical decision trees that define the agent's core logic.
+
+#### 4.3 Scenario Definitions
+
+> **These scenarios become test cases in `/validate-implementation`.**
+
+For each major workflow the agent performs:
+
+```markdown
+**Scenario: [Descriptive Name]**
+- Given: [Initial state/input]
+- When: [Trigger/action]
+- Then: [Expected outcome]
+- Error path: [What happens if it fails]
+- Edge case: [Unusual input/state variation]
+```
+
+Define 8-15 scenarios covering:
+- Happy paths (3-5 scenarios)
+- Error recovery (2-4 scenarios)
+- Edge cases (2-4 scenarios)
+- Integration failures (1-3 scenarios)
+
+#### 4.4 Error Recovery Patterns
+
+| Error Type | Detection | Recovery Action | User Communication |
+|-----------|-----------|-----------------|-------------------|
+| [API timeout] | [How detected] | [What agent does] | [What user sees] |
+| [Invalid input] | [How detected] | [What agent does] | [What user sees] |
+| [Service down] | [How detected] | [What agent does] | [What user sees] |
+
+---
+
+### **5. User Stories** (60-80 lines)
 
 5-8 user stories, each with status tracking and acceptance criteria.
-
-**Format for each story:**
 
 ```markdown
 ### US-001: [Story Title]
@@ -94,110 +157,59 @@ This constraint exists because:
 - [ ] Criterion 2
 - [ ] Criterion 3
 
-**Phase:** [Which implementation phase addresses this]
+**Scenarios**: SC-001, SC-003 (references to Section 4.3)
+**Phase:** [Which implementation phase]
 **Status:** ⚪ Not Started
 ```
 
-**IMPORTANT:** User stories are referenced by implementation phases. Each phase should list which US-XXX stories it fulfills.
+**IMPORTANT:** User stories reference scenarios from Section 4.3. Each scenario maps to at least one user story.
 
 ---
 
-### **6. Architecture & Patterns** (40-60 lines)
+### **6. Architecture & Patterns** (40-50 lines)
 
-- High-level architecture (plain English description, not diagrams)
+- High-level architecture (plain English description)
+- Agent pipeline flow (step-by-step what happens from input to output)
 - Directory structure (brief)
 - Key patterns to follow (2-4 patterns with one-line explanations)
-- Technology-specific conventions
 
 **Keep this section scannable - no code snippets. Reference docs if detail needed.**
 
 ---
 
-### **7. Agent Validation Profile** (OPTIONAL - 40-60 lines)
+### **7. Technology Stack** (25-35 lines)
 
-> **Include this section ONLY for AI agent projects** - applications with tools, external service integrations, or autonomous workflows. Skip entirely for standard web apps, APIs, or CLIs.
+| Component | Technology | Version | Purpose |
+|-----------|------------|---------|---------|
+| Runtime | [Name] | [Version] | [Why] |
+| Agent Framework | [Name] | [Version] | [Why] |
+| Database | [Name] | [Version] | [Why] |
+| Testing | [Name] | [Version] | [Why] |
 
-**When to include:**
-- Project uses MCP tools or agent frameworks
-- Project calls external APIs autonomously
-- Project has multi-step workflows or conversation flows
-- Project makes decisions based on external data
+**External Services:**
 
-**Services Inventory:**
-
-| Service | Purpose | Auth Type | Env Var |
-|---------|---------|-----------|---------|
-| [Service Name] | [What it does] | [api_key/oauth/none] | [ENV_VAR_NAME] |
-
-**Tools Inventory:**
-
-| Tool Name | Type | External Dependencies |
-|-----------|------|----------------------|
-| [Tool] | [MCP/internal/API] | [Services it calls] |
-
-**Workflow Paths:**
-
-Document key user-facing workflows:
-- **[Workflow Name]**: [Brief description of steps and decision points]
-- Note branching paths and error recovery flows
-
-**Error Scenarios:**
-
-List critical error cases that must be tested:
-- Service unavailable handling
-- Invalid input handling
-- Rate limit handling
-- Authentication failure handling
-
-**Mock Requirements:**
-
-Identify scenarios requiring mock data:
-- [Scenario]: Why mocking needed, what shape of data
+| Service | API Type | Auth | Purpose |
+|---------|----------|------|---------|
+| [Name] | [REST/GraphQL/SDK] | [API key/OAuth] | [What agent uses it for] |
 
 ---
 
-### **8. Technology Stack** (30-40 lines)
+### **8. MVP Scope** (30-40 lines)
 
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Backend | [Name] | [Version] |
-| Frontend | [Name] | [Version] |
-| Database | [Name] | [Version] |
-| Testing | [Name] | [Version] |
+**In Scope:**
+- ✅ Core functionality items
+- ✅ Group by category (Agent Core, Tools, Integrations, Pipeline)
 
-**Key Dependencies:** List critical libraries with purpose.
+**Out of Scope:**
+- ❌ Deferred features with brief reason
 
 ---
 
-### **9. Current Focus** (20-30 lines)
+### **9. Implementation Phases** (120-160 lines)
 
-> **Update this section at the start of each development session.**
+> **WORKFLOW CONTEXT:** Each phase is a self-contained brief for `/plan-feature`. After `/clear` and `/prime`, the user reads a phase, discusses, then runs `/plan-feature`.
 
-```markdown
-## Current Focus
-
-**Active Phase:** Phase [N] - [Name]
-**Active Stories:** US-XXX, US-XXX
-**Status:** 🟡 In Progress
-
-**Blockers:**
-- [Any blockers, or "None"]
-
-**Session Context:**
-- [Brief notes for next session - what was decided, what's next]
-
-**Last Updated:** [Date]
-```
-
----
-
-### **10. Implementation Phases** (150-200 lines)
-
-> **WORKFLOW CONTEXT:** Each phase is a **self-contained brief** for the `/plan-feature` command. After `/clear` and `/prime`, the user reads a phase, discusses clarifications, then runs `/plan-feature`. Write phases to enable this workflow.
-
-Break MVP into 3-4 phases. Each phase: 40-60 lines.
-
-**Phase Format:**
+Break MVP into 3-4 phases. Each phase: 40-55 lines.
 
 ```markdown
 ---
@@ -207,23 +219,25 @@ Break MVP into 3-4 phases. Each phase: 40-60 lines.
 **Status:** ⚪ Not Started | 🟡 In Progress | 🟢 Complete
 
 **User Stories Addressed:** US-XXX, US-XXX
+**Scenarios Validated:** SC-XXX, SC-XXX (from Section 4.3)
 
 **What This Phase Delivers:**
-2-3 sentences in plain English. What gets built, why it matters, how it fits the product.
+2-3 sentences in plain English.
 
 **Prerequisites:**
 - Previous phases that must be complete
 - External dependencies (API keys, services, accounts)
-- Codebase elements this depends on
 
 **Scope - Included:**
 - ✅ Deliverable 1: Brief description
 - ✅ Deliverable 2: Brief description
-- ✅ Deliverable 3: Brief description
 
 **Scope - NOT Included:**
 - ❌ What's deferred (prevents scope creep)
-- ❌ Explicit boundaries
+
+**Technologies Used This Phase:**
+- [Technology]: [Specific features/endpoints needed]
+  (Reference: `.agents/reference/{technology}-profile.md`)
 
 **Key Technical Decisions:**
 - Decision 1: Rationale in plain English
@@ -236,19 +250,42 @@ Break MVP into 3-4 phases. Each phase: 40-60 lines.
 **Done When:**
 - Observable outcome 1
 - Observable outcome 2
-- Validation command or check to run
+- Scenarios SC-XXX pass validation
 
 ---
 ```
 
 ---
 
-### **11. Success Criteria** (30-40 lines)
+### **10. Current Focus** (15-25 lines)
+
+> **Update this section at the start of each development session.**
+
+```markdown
+## Current Focus
+
+**Active Phase:** Phase [N] - [Name]
+**Active Stories:** US-XXX, US-XXX
+**Status:** 🟡 In Progress
+**Research Status:** [Complete / Pending] (has /research-stack been run?)
+
+**Blockers:**
+- [Any blockers, or "None"]
+
+**Session Context:**
+- [Brief notes for next session]
+
+**Last Updated:** [Date]
+```
+
+---
+
+### **11. Success Criteria** (20-30 lines)
 
 **MVP is successful when:**
-1. [User can do X]
-2. [System handles Y]
-3. [Quality bar Z is met]
+1. [Agent can complete X workflow end-to-end]
+2. [All scenarios from Section 4.3 pass validation]
+3. [Quality/performance bar]
 
 **Validation Commands:**
 ```bash
@@ -259,16 +296,16 @@ Break MVP into 3-4 phases. Each phase: 40-60 lines.
 
 ---
 
-### **12. Risks & Mitigations** (20-30 lines)
+### **12. Risks & Mitigations** (15-25 lines)
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| [Risk 1] | High/Med/Low | [Strategy] |
-| [Risk 2] | High/Med/Low | [Strategy] |
+| [API rate limits] | High/Med/Low | [Strategy] |
+| [Service outage] | High/Med/Low | [Strategy] |
 
 ---
 
-### **13. Document History** (10-15 lines)
+### **13. Document History** (5-10 lines)
 
 | Date | Version | Changes |
 |------|---------|---------|
@@ -278,33 +315,44 @@ Break MVP into 3-4 phases. Each phase: 40-60 lines.
 
 ## Instructions
 
-### 1. Extract Requirements
-- Review conversation history
+### 1. Extract Requirements from Conversation
+- Review full conversation history
 - Identify explicit and implicit needs
-- Note constraints and preferences
+- Capture technology decisions WITH rationale
+- Note agent personality and decision-making preferences discussed
+- Extract scenario descriptions from examples given
 
-### 2. Synthesize
-- Organize into sections above
-- Fill reasonable assumptions (flag them)
-- Ensure technical feasibility
+### 2. Prioritize Agent Behavior
+- Agent Behavior Specification (Section 4) should be the most detailed section
+- Every workflow the agent performs needs scenario definitions
+- Decision trees must cover the critical paths discussed in conversation
+- Error recovery must be explicit, not assumed
 
-### 3. Write the PRD
+### 3. Map Technologies to Capabilities
+- For each technology mentioned in conversation, document:
+  - Why it was chosen (the conversation context)
+  - What the agent specifically needs from it
+  - How it fits the agent's workflow
+- This mapping feeds `/research-stack` which runs after PRD creation
+
+### 4. Write the PRD
 - Plain English over code snippets
 - Concrete examples over abstractions
 - Scannable formatting (bullets, tables, headers)
 
-### 4. Verify Length
+### 5. Verify Length
 - Count lines before finalizing
 - **Must be 500-750 lines**
-- Trim or expand as needed
+- If trimming needed: compress non-agent sections first, NEVER trim Section 4
 
-### 5. Quality Checks
+### 6. Quality Checks
 - [ ] All sections present
-- [ ] User stories have acceptance criteria
-- [ ] Phases reference user stories
+- [ ] Agent Behavior Specification is comprehensive (Section 4)
+- [ ] Technology Decisions capture conversation rationale (Section 3)
+- [ ] Scenario definitions are testable (Section 4.3)
+- [ ] User stories reference scenarios
+- [ ] Phases reference technologies and scenarios
 - [ ] Current Focus section included
-- [ ] Status indicators on stories and phases
-- [ ] Agent Validation Profile included (if agent project)
 - [ ] Within 500-750 line limit
 
 ---
@@ -316,14 +364,16 @@ After creating the PRD:
 2. Report line count (must be 500-750)
 3. List any assumptions made
 4. Suggest which phase to start with
+5. **Remind user**: Run `/research-stack` before `/plan-feature` to generate technology profiles
 
 ---
 
 ## Anti-Patterns to Avoid
 
 - ❌ Code snippets in PRD (save for plan-feature)
-- ❌ Detailed API specs (brief overview only, details in planning)
-- ❌ Generic descriptions (be specific and actionable)
-- ❌ Missing status indicators
-- ❌ Phases without user story references
+- ❌ Generic user stories without scenario references
+- ❌ Optional Agent Behavior section (it's MANDATORY for agent projects)
+- ❌ Technology decisions without rationale
+- ❌ Scenarios without error paths
+- ❌ Phases without technology references
 - ❌ Over 750 lines (forces better prioritization)
