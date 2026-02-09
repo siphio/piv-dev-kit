@@ -18,7 +18,9 @@ This framework solves the #1 problem with AI-assisted development: **context los
 - **Self-contained phases** - Each phase works standalone after `/clear` + `/prime`
 - **Human checkpoints** - Discussion before implementation, validation before shipping
 - **Scenario-based validation** - Prove the agent behaves correctly, not just that code compiles
+- **Structured reasoning** - Every command uses Chain-of-Thought internally, with visible reasoning summaries and self-reflection
 - **Agent Teams ready** - Commands parallelize automatically when Agent Teams is available
+- **Automation-ready** - Optional PIV-Automator-Hooks prepare artifacts for future SDK orchestration
 
 ---
 
@@ -72,6 +74,8 @@ This generates a `CLAUDE.md` file with:
 - Architecture patterns
 - AI assistant instructions
 - Agent Teams playbook (if using teams)
+- PIV Configuration (hooks toggle)
+- Prompting & Reasoning Guidelines (CoT, reflection, hooks format)
 
 ### 3. Start the PIV Loop
 
@@ -134,7 +138,7 @@ Creates an agent-native Product Requirements Document from conversation context.
 - Implementation phases referencing technologies and scenarios
 
 #### `/create_global_rules_prompt`
-Generates project-specific CLAUDE.md rules including Agent Teams playbook.
+Generates project-specific CLAUDE.md rules including Agent Teams playbook, PIV Configuration, and Prompting & Reasoning Guidelines.
 
 ---
 
@@ -359,6 +363,107 @@ Not recommended for simple single-file changes or tightly sequential work.
 
 ---
 
+## Chain-of-Thought & Structured Reasoning
+
+Every PIV command uses structured reasoning internally to improve output quality. This happens automatically — no configuration needed.
+
+### How It Works
+
+Each command has three reasoning layers:
+
+1. **Chain-of-Thought (CoT)** — Internal step-by-step reasoning before generating output. Different styles per command complexity:
+
+| Style | Commands | Description |
+|-------|----------|-------------|
+| Zero-shot | `/prime`, `/commit` | Simple step-by-step: "1. Scan structure. 2. Check progress..." |
+| Few-shot | `/create-prd`, `/create_global_rules_prompt` | Includes examples of good vs bad output quality |
+| Tree-of-Thought | `/plan-feature`, `/orchestrate-analysis` | Explores 2-3 approaches, evaluates each, selects best |
+| Per-subtask | `/execute`, `/research-stack`, `/validate-implementation` | Each task/technology/scenario gets its own reasoning chain |
+
+2. **Reasoning Summary** — A condensed 4-8 bullet summary visible in terminal output, showing *what was found* (not the full thinking process):
+
+```
+### Reasoning
+- Scanned 14 tracked files, identified 3 config patterns
+- Cross-referenced PRD Phase 2 with 2 technology profiles
+- Gap found: no rate limit handling for X API
+- Recommending: add retry logic before planning
+```
+
+3. **Self-Reflection** — A brief self-critique after generation, output to terminal only (never pollutes file artifacts):
+
+```
+### Reflection
+- ✅ All PRD scenarios accounted for
+- ⚠️ Technology profile for Redis not found — flagged in recommendations
+- ✅ Line count within budget (623 lines)
+```
+
+### Why This Matters
+
+- **Reduces drift** — Claude follows a structured reasoning path instead of free-associating
+- **Improves consistency** — Every run follows the same cognitive steps regardless of context window state
+- **Catches gaps at generation time** — Reflection identifies missing scenarios, misalignment with PRD, or incomplete coverage before the human even reviews
+- **Zero configuration** — Works automatically on every command invocation
+
+---
+
+## PIV-Automator-Hooks
+
+Optional machine-readable metadata blocks that can be appended to artifacts, preparing the framework for future autonomous SDK orchestration.
+
+### What They Are
+
+Simple key-value blocks at the end of file artifacts:
+
+```
+## PIV-Automator-Hooks
+validation_status: partial
+failure_categories: edge-cases,rate-limits
+suggested_action: re-execute
+suggested_command: execute
+retry_remaining: 2
+confidence: medium
+```
+
+- 5-15 lines, regex-parseable (`^([a-z_]+): (.+)$`)
+- Each command defines its own keys (next command, confidence, status, etc.)
+- Designed for a future SDK agent to parse and make deterministic decisions
+
+### Enabling Hooks
+
+Hooks are **disabled by default** — manual workflow stays clean.
+
+**Project-level toggle** (in CLAUDE.md):
+```markdown
+## PIV Configuration
+- hooks_enabled: true
+```
+
+**Per-command override:**
+```bash
+/create-prd myproject --with-hooks    # Enable for this run
+/validate-implementation --no-hooks   # Disable for this run
+```
+
+### Hook Placement
+
+- Commands that produce file artifacts (PRD, plans, profiles, validation reports) → hooks appended to the file
+- Terminal-only commands (`/prime`, `/commit`, `/create_global_rules_prompt`) → hooks appear in terminal output
+
+### Future Vision
+
+A single autonomous "PIV Automator" agent that:
+1. Starts from a goal or last artifact state
+2. Runs `/prime` → parses hooks → decides next command and arguments
+3. Loops on failures using validation hooks (`retry_remaining`, `suggested_action`)
+4. Mimics phase isolation with intelligent `/clear` + `/prime`
+5. Uses regex on `## PIV-Automator-Hooks` for fast, deterministic decisions
+
+Hooks are deliberately minimal and boring — enabling fast, deterministic parsing without LLM inference.
+
+---
+
 ## Project Structure
 
 After using PIV commands, your project will have:
@@ -440,12 +545,19 @@ your-project/
 | `/create_global_rules_prompt` | New project setup | `CLAUDE.md` |
 | `/research-stack` | After PRD, before planning (once) | `.agents/reference/*.md` |
 | `/plan-feature` | Before implementing each phase | `.agents/plans/*.md` |
+| `/plan-feature --reflect` | Extended reflection pass | `.agents/plans/*.md` |
 | `/execute` | After plan approved | Implemented code |
 | `/validate-implementation` | After execution | `.agents/validation/*.md` |
 | `/validate-implementation --full` | Before shipping | Full scenario results |
 | `/commit` | After validation | Git commit |
 | `/create_reference` | Need documentation | `.agents/reference/*.md` |
 | `/orchestrate-analysis` | Complex codebase analysis | Analysis report |
+
+**Global flags** (work on any command):
+| Flag | Effect |
+|------|--------|
+| `--with-hooks` | Enable PIV-Automator-Hooks for this run |
+| `--no-hooks` | Disable hooks for this run |
 
 ---
 
@@ -493,8 +605,9 @@ When modifying commands:
 1. Read the full command first
 2. Preserve PIV loop philosophy
 3. Ensure Agent Teams compatibility (parallel + sequential paths)
-4. Test the workflow end-to-end
-5. Keep cross-references consistent (PRD sections, profile structure)
+4. Include Reasoning Approach, Hook Toggle, Reasoning/Reflection output sections
+5. Test the workflow end-to-end
+6. Keep cross-references consistent (PRD sections, profile structure)
 
 ---
 
@@ -514,6 +627,8 @@ The PIV Dev Kit transforms AI agent development from chaotic to systematic:
 4. **Plan** - Technology-informed, scenario-mapped implementation plans
 5. **Build** - Parallel execution with Agent Teams
 6. **Verify** - Scenario-based validation proving the agent behaves correctly
+
+Every command uses **structured Chain-of-Thought reasoning** internally, outputs **visible reasoning summaries** for transparency, and performs **self-reflection** to catch gaps before human review. Optional **PIV-Automator-Hooks** prepare artifacts for future autonomous SDK orchestration.
 
 Every phase produces artifacts that survive context resets, enabling true iterative development with AI assistance.
 
