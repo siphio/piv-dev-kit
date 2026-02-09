@@ -21,8 +21,22 @@ argument-hint: [plan-file-path] [--full]
 - `$ARGUMENTS`: Plan file path (optional, defaults to most recent in `.agents/plans/`)
 - `--full`: Run all levels including full pipeline end-to-end (slower, may cost API credits)
 
-**Default runs Level 1 + Level 2 + Level 3** (syntax + components + scenarios)
-**With --full: adds Level 4** (full pipeline end-to-end)
+### What Runs in Each Mode
+
+| Phase | What It Does | Default | --full |
+|-------|-------------|---------|--------|
+| Phase 1 | Static analysis (code review) | ✅ ALWAYS | ✅ ALWAYS |
+| Phase 2 | Level 1 syntax + Level 2 unit tests | ✅ ALWAYS | ✅ ALWAYS |
+| Phase 3 | **LIVE integration tests (Tiers 1-3) + scenario validation** | ✅ ALWAYS | ✅ ALWAYS |
+| Phase 4 | Full end-to-end pipeline run | ❌ SKIPPED | ✅ RUNS |
+
+**CRITICAL: Phase 3 ALWAYS runs live tests.** This means:
+- **Tier 1** (auto-live health checks) — runs automatically, no approval needed
+- **Tier 2** (auto-live with test data) — runs automatically, no approval needed
+- **Tier 3** (approval-required) — presents each test to user for approval before executing
+- **Tier 4** (mock-only) — runs automatically with fixtures
+
+The `--full` flag ONLY adds Phase 4 (full pipeline). It does NOT control whether live tests run — **live tests (Tiers 1-3) are the default behavior, not an opt-in.**
 
 ## Reasoning Approach
 
@@ -68,12 +82,14 @@ Phase 2: Code Validation
     ├── Level 1: Syntax/lint/type checks
     └── Level 2: Unit + component tests
 
-Phase 3: Scenario Validation ← THE KEY PHASE
+Phase 3: LIVE Integration + Scenario Validation ← THE KEY PHASE (ALWAYS RUNS)
     │
-    ├── Test each PRD scenario (Section 4.3)
-    ├── Test decision tree outcomes (Section 4.2)
-    ├── Test error recovery paths (Section 4.4)
-    └── Test technology integration hooks
+    ├── Step 1: Tier 1 — Auto-live health checks (connectivity, auth) ← LIVE, NO APPROVAL
+    ├── Step 2: Tier 2 — Auto-live with test data + cleanup ← LIVE, NO APPROVAL
+    ├── Step 3: Tier 3 — Approval-required live tests ← LIVE, ASK USER FIRST
+    ├── Step 4: Tier 4 — Mock-only tests with fixtures
+    ├── Step 5: PRD scenario validation (Section 4.3) using tier results
+    └── Step 6: Decision tree verification (Section 4.2)
 
 Phase 4: Full Pipeline (--full only)
     │
@@ -187,11 +203,16 @@ Error: [error details]
 
 ## Phase 3: Live Integration Testing & Scenario Validation
 
+> **⚠️ THIS PHASE ALWAYS RUNS — it is NOT gated behind `--full`.**
 > **THE CORE PHASE - Tests real API integrations AND agent behavior against PRD scenarios.**
 > Uses the four-tier testing classification from technology profiles (Section 9).
+>
+> **You MUST execute Tiers 1-2 automatically (live, no approval), present Tier 3 for user approval,**
+> **and run Tier 4 with fixtures. Skipping live tests or treating everything as mock-only is a validation failure.**
 
-### Step 1: Tier 1 — Auto-Live Health Checks (No Approval)
+### Step 1: Tier 1 — Auto-Live Health Checks (No Approval) — MANDATORY
 
+**DO NOT SKIP. Execute these LIVE against real services — not mocked.**
 Execute ALL Tier 1 tests from every relevant technology profile automatically.
 These are read-only, zero-cost operations that verify connectivity and auth.
 
@@ -214,8 +235,9 @@ These are read-only, zero-cost operations that verify connectivity and auth.
 - Continue with other technologies
 - Attempt mock fallback for dependent scenarios if fixtures exist
 
-### Step 2: Tier 2 — Auto-Live with Test Data (No Approval)
+### Step 2: Tier 2 — Auto-Live with Test Data (No Approval) — MANDATORY
 
+**DO NOT SKIP. Execute these LIVE with real test data — not mocked.**
 Execute ALL Tier 2 tests automatically using pre-defined test data from profiles.
 These have controlled side effects with automatic cleanup.
 
@@ -239,8 +261,9 @@ These have controlled side effects with automatic cleanup.
 
 **Cleanup is mandatory:** Always run cleanup procedures after Tier 2 tests, even if the test itself failed. Cleanup must be idempotent.
 
-### Step 3: Tier 3 — Approval-Required Live Tests (Human in the Loop)
+### Step 3: Tier 3 — Approval-Required Live Tests (Human in the Loop) — MANDATORY
 
+**DO NOT SKIP. Present each test to the user for approval — do not silently mark as "Not applicable".**
 For each Tier 3 endpoint in the technology profiles, present the user with an approval prompt BEFORE executing. **Never auto-execute Tier 3 tests.**
 
 ```
