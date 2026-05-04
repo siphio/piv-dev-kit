@@ -5,6 +5,8 @@ argument-hint: [plan-file-path] [--full]
 
 # Validate Implementation: Scenario-Based Agent Validation
 
+**This is Stage 5 of 5** in the PIV flow: PRD → Research → Plan → Build → **Validate**. This command runs in its own fresh context window — no implementation bias carried over from `/execute`. After this stage produces a clean report, the user runs `/commit` to ship.
+
 ## Overview
 
 **Goes beyond code health checks.** Tests every user flow, tool capability, decision tree, and error recovery path defined in the PRD. Validates that the agent behaves correctly across all scenarios, not just that the code compiles.
@@ -61,6 +63,33 @@ Check CLAUDE.md for `## PIV Configuration` → `hooks_enabled` setting.
 If arguments contain `--with-hooks`, enable hooks. If `--no-hooks`, disable.
 Strip `--with-hooks`, `--no-hooks`, and `--full` from arguments before using remaining text as plan path.
 
+## Validation Tooling
+
+Pick the most effective tool per check. Don't default to one.
+
+| Task | Preferred tool | Why |
+|------|---------------|-----|
+| API endpoint probing (Tier 1-2) | `curl` + `jq` (or language equivalent) | Direct, scriptable, captures actual responses |
+| Comparing live response to captured fixture | `diff` / structural compare in script | Deterministic drift detection |
+| Driving web UI scenarios (when relevant) | `claude-in-chrome` | Real browser, console + network capture, screenshots as evidence |
+| Synthetic edge case generation | Reasoning over PRD §4.2/§4.4 + profile §3 schemas | 1M context holds all branches simultaneously; identifies uncovered edges |
+| Reading source for failure attribution | `Read` + `Grep` | Trace from observed failure back to code path |
+| Checking prior validation state | `Read` on most recent `.agents/validation/*.md` | Differential diff to flag regressions |
+
+**1M context unlock:** load all PRD scenarios + all profiles + all decision trees + all prior run results into one context. Cross-reference instead of summarize-and-discard. This is what enables consistency checks and synthetic generation that targets actual gaps.
+
+## Provenance-Aware Validation
+
+Profiles tag claims with `[source-verified]`, `[doc-only]`, or `[community]` (set by `/research-stack`). Treat them differently:
+
+| Tag | Validation behavior |
+|-----|-------------------|
+| `[source-verified]` | Trust as ground truth. Probe-confirm only if drift detection runs. |
+| `[doc-only]` | **Probe live to confirm reality.** Doc-only claims are the most likely source of validation surprises. |
+| `[community]` | Use as targeted edge-case input. If a community gotcha says "API returns 200 with empty body on duplicate POST," generate a synthetic test that triggers exactly that. |
+
+When a `[doc-only]` claim is contradicted by a live probe, surface it in the report as a profile-drift finding so `/research-stack --fresh` can correct it.
+
 ---
 
 ## Architecture
@@ -71,7 +100,9 @@ Phase 0: Context Loading
     ├── Read plan file → Extract VALIDATION COMMANDS
     ├── Read PRD → Extract Section 4.3 Scenario Definitions
     ├── Read PRD → Extract Section 4.4 Error Recovery Patterns
-    └── Read technology profiles → Extract Validation Hooks (Section 9)
+    ├── Read technology profiles → Extract Validation Hooks (Section 9)
+    ├── Read provenance tags → Plan probe targets for [doc-only] claims
+    └── Load most recent prior validation report (if any) → For differential diff
 
 Phase 1: Static Analysis (Quick)
     │
@@ -84,16 +115,24 @@ Phase 2: Code Validation
 
 Phase 3: LIVE Integration + Scenario Validation ← THE KEY PHASE (ALWAYS RUNS)
     │
-    ├── Step 1: Tier 1 — Auto-live health checks (connectivity, auth) ← LIVE, NO APPROVAL
+    ├── Step 1: Tier 1 — Auto-live health + fixture drift detection ← LIVE, NO APPROVAL
     ├── Step 2: Tier 2 — Auto-live with test data + cleanup ← LIVE, NO APPROVAL
     ├── Step 3: Tier 3 — Approval-required live tests ← LIVE, ASK USER FIRST
     ├── Step 4: Tier 4 — Mock-only tests with fixtures
-    ├── Step 5: PRD scenario validation (Section 4.3) using tier results
-    └── Step 6: Decision tree verification (Section 4.2)
+    ├── Step 5: PRD scenario validation (Section 4.3) — UI scenarios via browser when relevant
+    ├── Step 6: Decision tree verification (Section 4.2)
+    ├── Step 7: Synthetic edge case generation (covers gaps from §4.2/§4.4)
+    └── Step 8: Cross-scenario consistency check (uses 1M context)
 
 Phase 4: Full Pipeline (--full only)
     │
     └── End-to-end agent run with real/mock inputs
+
+Phase 5: Report
+    │
+    ├── Differential diff vs prior run (regressions flagged)
+    ├── Coverage gap analysis (PRD vs synthetic vs untested)
+    └── Failure attribution chains for all FAILs
 ```
 
 ---
@@ -123,9 +162,28 @@ ls -t .agents/plans/*.md 2>/dev/null | head -1
 **From Technology Profiles (if exist):**
 - Check `.agents/reference/` for `*-profile.md` files
 - From each relevant profile, read Section 9: Validation Hooks
+- Read Section 6.5: Maintenance & Risk Signals (drives expected reliability)
+- Extract provenance tags applied to claims — list all `[doc-only]` claims as live-probe targets
 - Extract health checks, smoke tests, and mock strategies
+- List captured Tier 1 fixtures from `.agents/fixtures/` for drift detection
 
-### Step 3: Build Validation Matrix
+### Step 3: Load Prior Validation Report (Differential Diff)
+
+If a prior report exists at `.agents/validation/`, load the most recent one:
+
+```bash
+ls -t .agents/validation/*.md 2>/dev/null | head -1
+```
+
+Extract from the prior report:
+- Pass/fail counts by category
+- Specific scenarios that failed
+- Failure attribution chains
+- Captured fixtures referenced
+
+Hold this in context for Phase 5's regression diff. **Don't fail-replicate**: a prior failure doesn't predetermine the current run — re-run the failed scenarios fresh and report the new outcome.
+
+### Step 4: Build Validation Matrix
 
 Combine all sources into a validation matrix:
 
@@ -150,6 +208,17 @@ Combine all sources into a validation matrix:
 ### Technology Validation (from Profiles)
 - Health checks: [N]
 - Smoke tests: [N]
+- `[doc-only]` claims to probe: [N]
+- Captured fixtures available for drift check: [N]
+
+### Synthetic Coverage (planned)
+- Decision branches in PRD §4.2: [N]
+- Error recovery paths in PRD §4.4: [N]
+- `[community]` gotchas to convert to test cases: [N]
+
+### Differential Context
+- Prior report: `[path]` ([date]) | none
+- Prior failures to re-test: [N]
 
 ### Acceptance Criteria
 - [ ] [Criterion 1]
@@ -210,11 +279,15 @@ Error: [error details]
 > **You MUST execute Tiers 1-2 automatically (live, no approval), present Tier 3 for user approval,**
 > **and run Tier 4 with fixtures. Skipping live tests or treating everything as mock-only is a validation failure.**
 
-### Step 1: Tier 1 — Auto-Live Health Checks (No Approval) — MANDATORY
+### Step 1: Tier 1 — Auto-Live Health Checks + Fixture Drift Detection (No Approval) — MANDATORY
 
 **DO NOT SKIP. Execute these LIVE against real services — not mocked.**
 Execute ALL Tier 1 tests from every relevant technology profile automatically.
 These are read-only, zero-cost operations that verify connectivity and auth.
+
+**Two-part check:**
+1. **Health probe** — confirm endpoint is reachable and auth works
+2. **Fixture drift detection** — diff live response against captured fixture from `.agents/fixtures/{tech}-{endpoint}.json` (written by `/research-stack` Step 6)
 
 ```
 ### Tier 1: Live Integration Health Checks
@@ -222,18 +295,28 @@ These are read-only, zero-cost operations that verify connectivity and auth.
 [Technology Name]:
   Endpoint: GET /[endpoint]
   Running: [health check command from profile Section 9.1]
-  Response: [actual response summary]
-  Schema: [fields match / fields missing]
-  ✅ HEALTHY | ❌ UNREACHABLE | ⚠️ AUTH FAILED
-
-[Next Technology]:
-  ...
+  Live response: [actual response summary]
+  Captured fixture: .agents/fixtures/[tech]-[endpoint].json (recorded [date])
+  Drift check:
+    - Schema match: ✅ identical | ⚠️ added/removed fields | ❌ shape changed
+    - Field types: ✅ match | ❌ [field] changed [old-type] → [new-type]
+    - Required fields present: ✅ / ❌ missing [field]
+  Status: ✅ HEALTHY | ⚠️ DRIFT DETECTED | ❌ UNREACHABLE | ⚠️ AUTH FAILED
+  [if drift] → Recommend: /research-stack --only [tech] --fresh
 ```
 
 **If Tier 1 fails for a technology:**
 - Mark ALL scenarios depending on that technology as ⚠️ DEGRADED
 - Continue with other technologies
 - Attempt mock fallback for dependent scenarios if fixtures exist
+
+**If drift detected:**
+- Continue validation but flag profile as stale in the report
+- Drift is a warning, not a failure — but it means downstream `[doc-only]` claims may be wrong
+
+**If no captured fixture exists:**
+- Capture one now from the live response and write to `.agents/fixtures/{tech}-{endpoint}.json`
+- Mark as `[probe-captured-during-validation]` so future drift checks have a baseline
 
 ### Step 2: Tier 2 — Auto-Live with Test Data (No Approval) — MANDATORY
 
@@ -366,6 +449,30 @@ Details: [What happened, which tiers were live vs mocked]
 - Feed edge case data to agent logic
 - Verify graceful handling per PRD scenarios
 
+**Browser-driven scenarios (when relevant)** — For agents that involve a web UI or trigger browser actions, drive the scenario through `claude-in-chrome` rather than just calling underlying functions:
+- Detect: scenario mentions a UI surface (login, form submit, dashboard interaction, OAuth redirect, hosted-page completion)
+- Drive each Given/When/Then step in a real browser
+- Capture as evidence: screenshots at each Then step, console errors during the run, network requests fired
+- Save evidence to `.agents/validation/evidence/{scenario-id}/` (screenshots, har files)
+- Compare actual UI state to PRD's Then clause — fail if visible state diverges from expected
+
+```
+### Browser Scenario: [Name] (PRD 4.3)
+
+Browser flow:
+  Step 1 (Given): Navigate to [URL] — ✅ loaded | ❌ failed
+  Step 2 (When): [click X / fill form / submit] — ✅ acted | ❌ no element found
+  Step 3 (Then): Verify [expected UI state] — ✅ matches | ❌ diverged
+
+Console errors during run: [N] — [list if any]
+Network failures: [N] — [list 4xx/5xx]
+Evidence: .agents/validation/evidence/[scenario-id]/
+
+Result: ✅ PASS | ❌ FAIL | ⚠️ PARTIAL
+```
+
+For CLI/backend agents with no UI surface, skip browser path entirely — existing function-call validation applies.
+
 ### Step 6: Decision Tree Verification
 
 For each decision tree in PRD Section 4.2, verify with real data where possible:
@@ -381,6 +488,87 @@ Data source: [Live Tier 1-3 response / Fixture / Mock]
 | [Condition B] | [Action B] | [What happened] | [Live/Fixture] | ✅/❌ |
 | [Failure] | [Recovery] | [What happened] | [Mock error] | ✅/❌ |
 ```
+
+### Step 7: Synthetic Edge Case Generation
+
+PRD scenarios cover the cases the author thought of. Synthetic generation covers the cases they didn't. Use the 1M context to hold all PRD scenarios + decision branches + error recovery paths + profile schemas + community gotchas simultaneously, identify uncovered edges, and generate test cases that exercise them.
+
+**Generation sources (highest signal first):**
+
+1. **Decision branches not exercised by §4.3 scenarios** — for each branch in PRD §4.2 not covered by Step 5, synthesize input that should trigger it
+2. **Error recovery paths in PRD §4.4** — synthesize the error condition (mock 429, mock 500, mock timeout, malformed response) and verify the documented recovery actually happens
+3. **`[community]` gotchas from profiles** — convert each into a directed test (e.g. "API returns 200 with empty body on duplicate POST" → submit a duplicate, assert agent handles empty body)
+4. **Boundary values from profile §2 data models** — empty/null, max-length, unicode, special chars, negative numbers — for each field the agent processes
+5. **Concurrency edges (only if relevant)** — race conditions, parallel calls — only for agents whose architecture handles concurrency
+
+**Tier classification for synthetic calls — MUST respect:**
+
+| Synthetic call type | Tier | Approval | Cleanup |
+|---------------------|------|----------|---------|
+| Read-only probe with synthetic params | Tier 1 | Auto-live | None |
+| Mutating call with synthetic test data | Tier 2 | Auto-live | **Mandatory cleanup, idempotent** |
+| Costly synthetic call (paid inference, etc.) | Tier 3 | **Present to user with "synthetic edge case" label** | Per profile |
+| Irreversible synthetic call | **NEVER GENERATED** | N/A — use mock with crafted fixture | N/A |
+
+Output:
+```
+### Synthetic Edge Cases
+
+Coverage gaps identified: [N]
+Test cases generated: [N]
+
+[Gap 1: Decision branch §4.2.3 "rate limit on retry"]
+  Generated: Mock 429 response with Retry-After: 60 header
+  Tier: Mock (no live call)
+  Expected agent action (per PRD): wait 60s then retry
+  Actual agent action: [observed behavior]
+  Result: ✅ PASS | ❌ FAIL — agent retried immediately
+
+[Gap 2: Boundary "empty string in name field"]
+  Generated: POST /[endpoint] with `{"name": ""}`
+  Tier: Tier 2 (mutating, with cleanup)
+  Live response: [actual]
+  Cleanup: ✅ CLEANED
+  Expected: 400 with validation error
+  Actual: [observed]
+  Result: ✅ PASS | ❌ FAIL
+
+[Gap 3: Community gotcha "duplicate POST returns 200 empty"]
+  Generated: Two identical POST /[endpoint] calls in sequence
+  Tier: Tier 2 (mutating, with cleanup)
+  Result: [observed agent handling]
+```
+
+**Auditability rule:** every synthetic call must log the gap it addresses (decision branch ID, error path, gotcha source). No untraceable synthetic calls — they pollute the report.
+
+### Step 8: Cross-Scenario Consistency Check
+
+With all PRD scenarios + all results + all profiles loaded in context, look for contradictions and behavioral conflicts. This catches a class of bug pure pass/fail can't see.
+
+Check for:
+- **Contradictory expectations** — e.g. scenario A expects retry-on-429, scenario B expects fail-fast on the same condition
+- **Behavior divergence** — same input produces different agent decisions across scenarios without explaining why
+- **Missing fallthroughs** — decision tree exits one branch but no scenario tests where it goes after
+- **Implicit dependencies** — scenario X assumes state from scenario Y but they run independently
+
+```
+### Cross-Scenario Consistency
+
+Findings: [N]
+
+[Finding 1: Contradiction]
+  Scenarios: SC-003, SC-007
+  Conflict: Both trigger HTTP 429 from [tech]; SC-003 expects retry-after, SC-007 expects immediate fail
+  Resolution needed: [PRD owner clarifies which is correct, or both branches need explicit conditions]
+
+[Finding 2: Coverage gap with implicit assumption]
+  Scenario SC-012 assumes [tech] response includes field X
+  No scenario tests behavior when field X is absent
+  Risk: agent crashes on real-world responses missing X
+  Recommendation: add error recovery scenario or synthetic edge case
+```
+
+If no findings: report "No cross-scenario contradictions detected. [N] scenarios, [M] decision branches checked."
 
 ### Agent Teams Mode (When Available)
 
@@ -506,6 +694,96 @@ Location: `.agents/validation/{feature-name}-{YYYY-MM-DD}.md`
 |-----------|-----------|-------------|----------------|--------|
 | [Name] | POST /[endpoint] | `.agents/fixtures/[file]` | [Decision triggered] | ✅ PASS |
 
+### Fixture Drift (Tier 1)
+| Technology | Endpoint | Drift | Recommendation |
+|-----------|----------|-------|----------------|
+| [Name] | GET /[endpoint] | ✅ none | — |
+| [Name] | GET /[endpoint] | ⚠️ field added | Run `/research-stack --only [tech] --fresh` |
+
+### Profile Provenance (where doc-only claims were probed)
+| Technology | Claim | Provenance | Live probe | Result |
+|-----------|-------|-----------|-----------|--------|
+| [Name] | Auth header format | `[doc-only]` | Probed | ✅ confirmed |
+| [Name] | Returns 200 on success | `[doc-only]` | Probed | ❌ actually returns 201 — profile drift |
+
+---
+
+## Synthetic Edge Case Validation
+
+| Gap source | Generated test | Tier | Result | Details |
+|-----------|---------------|------|--------|---------|
+| Decision branch §4.2.3 | Mock 429 retry | Mock | ✅ PASS | Agent retried after 60s |
+| Boundary: empty name | POST with `{"name":""}` | Tier 2 | ❌ FAIL | Returned 200 instead of 400 |
+| Community gotcha (SDK) | Duplicate POST | Tier 2 | ✅ PASS | Agent handled empty body |
+
+**Coverage delta from synthetic generation:**
+- Decision branches now exercised: [N]/[Total]
+- Error recovery paths now exercised: [N]/[Total]
+- Community gotchas now tested: [N]/[Total]
+
+---
+
+## Coverage Gap Analysis
+
+> Tracks what was tested by humans (PRD scenarios), what was tested by synthetic generation, and what remains untested.
+
+| Category | PRD-defined | Synthetic | Untested | Total |
+|----------|-------------|-----------|----------|-------|
+| Decision branches (§4.2) | [N] | [N] | [N] | [N] |
+| Error recovery paths (§4.4) | [N] | [N] | [N] | [N] |
+| Endpoint capabilities | [N] | [N] | [N] | [N] |
+
+**Untested items requiring attention:**
+- [Decision branch / scenario / endpoint] — Why untested: [reason — e.g. "irreversible action, no fixture available"]
+- [...] — Action: [add scenario / capture fixture / accept as known limitation]
+
+---
+
+## Cross-Scenario Consistency
+
+[N] findings:
+- [Finding 1: contradiction or implicit dependency]
+- [Finding 2: ...]
+
+If none: "No contradictions detected across [N] scenarios and [M] decision branches."
+
+---
+
+## Failure Attribution
+
+> For every FAIL above, the chain that produced it. Don't accept "test failed" as a final answer.
+
+| Scenario/Test | Observed failure | Attribution chain |
+|---------------|------------------|-------------------|
+| SC-007 | Agent didn't retry on 429 | External: API returned 429 → Logic: agent's retry handler skipped Retry-After header → Code: `src/api/retry.ts:42` ignores header — ROOT CAUSE |
+| Synthetic empty-name | API returned 200 instead of 400 | External: API doesn't validate → Profile drift: §3 claimed 400 but `[doc-only]` — Recommend: re-run `/research-stack --fresh`, fix expected behavior |
+
+**Attribution categories:**
+- `Auth` — credentials, OAuth, token expiry
+- `Schema drift` — API response shape changed since profile was captured
+- `Logic` — agent code path doesn't implement PRD behavior correctly
+- `External` — service outage, rate limit, transient failure
+- `Data` — invalid input, missing required field, malformed payload
+- `Profile` — research-stack profile was wrong; doc-only claim contradicted by reality
+
+---
+
+## Differential vs Prior Run
+
+> Comparison with most recent prior validation report.
+
+**Prior report**: `[path]` ([date])
+**Regressions** (passed before, fails now): [N]
+- [Scenario X] — was PASS, now FAIL — [brief attribution]
+
+**Improvements** (failed before, passes now): [N]
+- [Scenario Y] — was FAIL, now PASS
+
+**New tests** (not in prior run): [N]
+**Removed tests** (in prior, not now): [N]
+
+If no prior run: "First validation run — no diff available."
+
 ---
 
 ## Acceptance Criteria
@@ -526,11 +804,16 @@ Location: `.agents/validation/{feature-name}-{YYYY-MM-DD}.md`
 | Happy Paths | [N] | [N] | [N] |
 | Error Recovery | [N] | [N] | [N] |
 | Edge Cases | [N] | [N] | [N] |
+| Browser scenarios (if any) | [N] | [N] | [N] |
 | Decision Trees | [N] | [N] | [N] |
+| Synthetic edge cases | [N] | [N] | [N] |
 | Tier 1 (Auto-Live) | [N] | [N] | [N] |
+| Tier 1 fixture drift | [N] none | [N] drifted | — |
 | Tier 2 (Test Data) | [N] | [N] | [N] |
 | Tier 3 (Approval) | [N] | [N] | [N] |
 | Tier 4 (Mock) | [N] | [N] | [N] |
+| Cross-scenario consistency | [N] clean | [N] findings | — |
+| Regressions vs prior run | — | [N] | — |
 | Pipeline (if --full) | [N] | [N] | [N] |
 
 ---
@@ -568,16 +851,36 @@ Location: `.agents/validation/{feature-name}-{YYYY-MM-DD}.md`
 ### Technology Integration (Four Tiers)
 | Tier | Results |
 |------|---------|
-| Tier 1 (Auto-Live) | ✅ [N]/[N] healthy |
+| Tier 1 (Auto-Live) | ✅ [N]/[N] healthy, ⚠️ [N] drift |
 | Tier 2 (Test Data) | ✅ [N]/[N] passed, [N]/[N] cleaned |
 | Tier 3 (Approval) | ✅ [N] approved, [N] skipped, [N] fixture |
 | Tier 4 (Mock) | ✅ [N]/[N] passed |
+
+### Synthetic Coverage
+| Source | Tests | Pass | Fail |
+|--------|-------|------|------|
+| Decision branch gaps | [N] | [N] | [N] |
+| Error recovery synth | [N] | [N] | [N] |
+| Community gotchas | [N] | [N] | [N] |
+| Boundary values | [N] | [N] | [N] |
+
+### Cross-Scenario Consistency
+[N] findings | None detected
+
+### Differential vs Prior Run
+[N] regressions | [N] improvements | First run
+
+### Coverage
+- PRD scenarios: [N]/[Total]
+- Decision branches: [N]/[Total] (PRD + synthetic)
+- Error recovery paths: [N]/[Total]
+- Untested items: [N] — see report
 
 ### Acceptance Criteria
 ✅ [N]/[N] verified
 
 ### Next Steps
-→ Ready for `/commit` | Fix [N] issues first
+→ Ready for `/commit` | Fix [N] issues first | Re-run `/research-stack --fresh` for [N] drift
 ```
 
 ### Reasoning
@@ -587,9 +890,13 @@ Output 4-8 bullets summarizing validation:
 ```
 ### Reasoning
 - Tested [N] code validation commands (Level 1-2)
-- Validated [N] PRD scenarios ([N] happy, [N] error, [N] edge)
+- Validated [N] PRD scenarios ([N] happy, [N] error, [N] edge, [N] browser-driven)
 - Verified [N] decision tree branches
 - Technology integration: [N] Tier 1, [N] Tier 2, [N] Tier 3, [N] Tier 4
+- Generated [N] synthetic edge cases — [N] uncovered branches now exercised
+- Fixture drift: [N] APIs drifted from captured profile
+- Cross-scenario findings: [N] (contradictions/gaps)
+- Differential: [N] regressions vs prior run
 - Key finding: [most important result]
 ```
 
@@ -597,8 +904,11 @@ Output 4-8 bullets summarizing validation:
 
 Self-critique the validation (terminal only):
 - Did we achieve full scenario coverage from PRD Section 4.3?
-- Are any decision tree branches untested?
-- Were failure categories correctly identified?
+- Are any decision tree branches untested even after synthetic generation?
+- Were `[doc-only]` claims probed live? Any profile drift surfaced?
+- Did synthetic edge cases respect tier classification (no irreversible synth-calls, all Tier 2 cleaned up)?
+- Were failure attributions traced to root cause, or did we stop at symptom?
+- Were regressions vs prior run flagged honestly?
 - Is the recommended next step accurate given results?
 
 ### PIV-Automator-Hooks (If Enabled)
@@ -611,9 +921,16 @@ validation_status: [pass|partial|fail]
 scenarios_passed: [N]/[Total]
 scenarios_failed: [N]
 decision_branches_tested: [N]/[Total]
-failure_categories: [comma-separated: e.g. edge-cases,rate-limits]
-suggested_action: [commit|re-execute|fix-and-revalidate]
-suggested_command: [commit|execute|validate-implementation]
+synthetic_tests_generated: [N]
+synthetic_tests_passed: [N]
+fixture_drift_count: [N]
+profile_drift_flagged: [N]
+cross_scenario_findings: [N]
+regressions_vs_prior: [N]
+coverage_pct: [N]
+failure_categories: [comma-separated: e.g. edge-cases,rate-limits,profile-drift]
+suggested_action: [commit|re-execute|fix-and-revalidate|refresh-research]
+suggested_command: [commit|execute|validate-implementation|research-stack]
 suggested_arg: "[appropriate argument]"
 retry_remaining: [N]
 requires_clear: [true|false]
@@ -690,16 +1007,25 @@ uv run python -m agent.main --input "..."
 
 - [ ] Plan read and validation commands extracted
 - [ ] PRD scenarios extracted (if PRD exists)
-- [ ] Technology profiles read (if they exist)
+- [ ] Technology profiles read with provenance tags (if they exist)
+- [ ] Prior validation report loaded for differential diff (if exists)
 - [ ] Level 1 commands executed (all must pass to continue)
 - [ ] Level 2 commands executed (failures noted)
-- [ ] Tier 1 auto-live health checks executed
+- [ ] Tier 1 auto-live health checks executed + fixture drift checked
+- [ ] `[doc-only]` claims probed live; profile drift surfaced
 - [ ] Tier 2 auto-live tests with test data executed + cleanup run
 - [ ] Tier 3 approval-required tests presented to user (approved/skipped/fixture)
 - [ ] Tier 4 mock-only tests executed with fixtures
-- [ ] PRD scenario validation complete (happy paths, error recovery, edge cases)
+- [ ] PRD scenario validation complete (happy paths, error recovery, edge cases, browser-driven if applicable)
 - [ ] Decision tree verification complete
+- [ ] Synthetic edge cases generated and executed (respecting tier classification)
+- [ ] Cross-scenario consistency check complete
+- [ ] Differential diff vs prior run computed (if prior exists)
+- [ ] Failure attribution chains documented for every FAIL
+- [ ] Coverage gap analysis section in report
 - [ ] Level 4 pipeline tested (if --full flag)
 - [ ] Report written with actual pass/fail results per tier
 - [ ] Acceptance criteria verified against scenarios
 - [ ] All PRD scenarios accounted for (tested or documented as untestable)
+- [ ] All synthetic Tier 2 calls have completed cleanup
+- [ ] Browser scenario evidence saved to `.agents/validation/evidence/` (if applicable)

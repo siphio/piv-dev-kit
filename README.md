@@ -2,7 +2,7 @@
 
 **AI-Powered Agent Development Framework**
 
-A systematic approach to building AI agents with Claude Code. The PIV (Prime-Implement-Validate) loop ensures every feature is properly planned, implemented, and verified before moving forward. Designed for Opus 4.6 and Agent Teams.
+A systematic 5-stage flow for building AI agents with Claude Code. Designed for **Opus 4.7's 1M context window** — each stage gets a full window, no per-phase cycling, no carry-over noise.
 
 ---
 
@@ -10,43 +10,46 @@ A systematic approach to building AI agents with Claude Code. The PIV (Prime-Imp
 
 > "Most AI coding failures are context failures, not capability failures."
 
-This framework solves the #1 problem with AI-assisted development: **context loss**. By creating structured documents at each phase, you maintain continuity across sessions, context resets, and even different AI assistants.
+This framework solves the #1 problem with AI-assisted development: **context loss**. With Opus 4.7's 1M context, each of the 5 stages runs in its own fresh context window — the framework's job is to produce durable file artifacts at each stage so the next stage starts clean with full fidelity.
 
 **Core Principles:**
-- **Plain English over code snippets** - Documents should be readable by humans
-- **Context is King** - Every command maximizes useful context
-- **Self-contained phases** - Each phase works standalone after `/clear` + `/prime`
-- **Human checkpoints** - Discussion before implementation, validation before shipping
-- **Scenario-based validation** - Prove the agent behaves correctly, not just that code compiles
-- **Structured reasoning** - Every command uses Chain-of-Thought internally, with visible reasoning summaries and self-reflection
-- **Agent Teams ready** - Commands parallelize automatically when Agent Teams is available
-- **Automation-ready** - Optional PIV-Automator-Hooks prepare artifacts for future SDK orchestration
+- **One stage per context window** — PRD, Research, Plan, Build, Validate each get a fresh window
+- **One comprehensive plan, no phases by default** — phases are opt-in only when work is genuinely incrementally shippable
+- **File-based handoffs** — every stage produces durable artifacts (`PRD.md`, profiles, plan, code, validation report)
+- **Plain English over code snippets** — documents are scannable by humans
+- **Provenance throughout** — claims tagged `[source-verified]` / `[doc-only]` / `[community]` flow from research → plan → build → validate
+- **Live + synthetic validation** — real API probes plus auto-generated edge cases for branches the PRD didn't think of
+- **Human checkpoints** — between stages and at natural milestones inside `/execute`
 
 ---
 
-## The PIV Loop
+## The 5-Stage Flow
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                              PIV LOOP                                    │
-│                                                                          │
-│   PRIME ────► DEFINE ────► RESEARCH ────► PLAN ────► BUILD ────► VERIFY  │
-│     │           │            │              │          │           │      │
-│  /prime    /create-prd  /research-stack  /plan     /execute  /validate   │
-│                                         -feature              -impl     │
-│                                                                          │
-│     ◄──────────────────── Feedback Loop ◄────────────────────            │
-└──────────────────────────────────────────────────────────────────────────┘
+Stage 1: PRD          /create-prd                    → PRD.md
+            ↓ /clear  ↓
+Stage 2: Research     /prime → /research-stack       → .agents/reference/*-profile.md
+            ↓ /clear  ↓                              → .agents/fixtures/*.json
+Stage 3: Plan         /prime → /plan-feature         → .agents/plans/plan.md
+            ↓ /clear  ↓
+Stage 4: Build        /prime → /execute              → source code
+            ↓ /clear  ↓
+Stage 5: Validate     /prime → /validate-impl        → .agents/validation/*.md
+                                                     → /commit
 ```
 
-| Phase | Purpose | Commands |
-|-------|---------|----------|
-| **Prime** | Load context, understand project state | `/prime` |
-| **Define** | Create agent-native requirements | `/create-prd`, `/create_global_rules_prompt` |
-| **Research** | Deep-dive technology stack (run once) | `/research-stack` |
-| **Plan** | Create implementation plans per phase | `/plan-feature` |
-| **Build** | Execute plans with parallel task support | `/execute` |
-| **Verify** | Scenario-based agent validation | `/validate-implementation`, `/commit` |
+| Stage | Purpose | Command | Output |
+|-------|---------|---------|--------|
+| **1. PRD** | Define agent-native requirements | `/create-prd` | `PRD.md` |
+| **2. Research** | Deep-dive technology stack with source verification | `/research-stack` | Technology profiles + captured fixtures |
+| **3. Plan** | One comprehensive plan covering full PRD | `/plan-feature` | `.agents/plans/plan.md` |
+| **4. Build** | Implement plan with milestone checkpoints | `/execute` | Source code |
+| **5. Validate** | Live + synthetic validation, fresh adversarial eye | `/validate-implementation` | `.agents/validation/*.md` |
+
+**Why fresh context per stage:**
+- PRD work is product thinking, research is technical, plan is architectural, build is implementation, validate is adversarial. Each benefits from a clean break.
+- Validate especially benefits from zero implementation bias — fresh eye on the same artifacts catches blind spots `/execute` would miss.
+- 1M per stage > 200k recycled across 4 cycles per phase. Less ritual, more depth.
 
 ---
 
@@ -57,7 +60,6 @@ This framework solves the #1 problem with AI-assisted development: **context los
 Copy the `.claude/commands/` folder to your project:
 
 ```bash
-# From your project root
 mkdir -p .claude/commands
 cp -r /path/to/piv-dev-kit/.claude/commands/* .claude/commands/
 ```
@@ -68,263 +70,228 @@ cp -r /path/to/piv-dev-kit/.claude/commands/* .claude/commands/
 /create_global_rules_prompt
 ```
 
-This generates a `CLAUDE.md` file with:
-- Tech stack documentation
-- Code conventions
-- Architecture patterns
-- AI assistant instructions
-- Agent Teams playbook (if using teams)
-- PIV Configuration (hooks toggle)
-- Prompting & Reasoning Guidelines (CoT, reflection, hooks format)
+Generates a `CLAUDE.md` file with tech stack docs, conventions, architecture patterns, AI assistant instructions, and PIV Configuration.
 
-### 3. Start the PIV Loop
+### 3. Run the 5 Stages
 
 ```bash
-# Prime: Understand the project
-/prime
-
-# Create agent-native requirements document
+# Stage 1 — PRD (in current context)
 /create-prd
 
-# Research all technologies in the PRD (run ONCE)
+# /clear, open new context
+/prime              # Stage detection: ready for Research
 /research-stack
 
-# Plan first phase
-/plan-feature "Phase 1 from PRD"
+# /clear, open new context
+/prime              # Stage detection: ready for Plan
+/plan-feature
 
-# Execute the plan (parallelizes with Agent Teams)
-/execute .agents/plans/phase-1.md
+# /clear, open new context
+/prime              # Stage detection: ready for Build
+/execute
 
-# Validate against PRD scenarios
-/validate-implementation .agents/plans/phase-1.md --full
+# /clear, open new context
+/prime              # Stage detection: ready for Validate
+/validate-implementation
 
 # Ship it
 /commit
 ```
 
+The user `/clear`s between stages. `/prime` detects the current stage from project artifacts and loads only the context that stage needs.
+
 ---
 
 ## Commands Reference
 
-### Prime Phase
-
-#### `/prime`
-Builds comprehensive understanding of your codebase, discovers technology profiles, and reports development progress.
-
-```bash
-/prime                    # Standard analysis
-/prime --with-refs        # Include reference documentation
-```
-
-**Output:** Project overview, architecture, tech stack, technology research status, recommended next step
-
----
-
-### Define Phase
+### Stage 1: PRD
 
 #### `/create-prd`
-Creates an agent-native Product Requirements Document from conversation context.
+
+Creates an agent-native Product Requirements Document.
 
 ```bash
 /create-prd              # Creates PRD.md
 /create-prd myproject    # Creates myproject.md
 ```
 
-**Output:** 500-750 line PRD with:
-- Agent Identity (personality, decision philosophy, autonomy level)
-- Technology Decisions with rationale (feeds `/research-stack`)
-- Agent Behavior Specification with decision trees and scenario definitions
-- User stories linked to scenarios
-- Implementation phases referencing technologies and scenarios
+**Output:** 500-750 line PRD with Agent Identity, Technology Decisions (with rationale), Agent Behavior Specification (decision trees + 8-15 scenario definitions + error recovery patterns), user stories.
 
-#### `/create_global_rules_prompt`
-Generates project-specific CLAUDE.md rules including Agent Teams playbook, PIV Configuration, and Prompting & Reasoning Guidelines.
+**Phases are opt-in.** By default the PRD describes the feature as one coherent system. Section 9 (Implementation Phases) only appears when work is genuinely incrementally shippable to users (e.g. "Phase 1 ships to prod, Phase 2 builds on it").
 
 ---
 
-### Research Phase
+### Stage 2: Research
 
 #### `/research-stack`
-**NEW** - Deep-dives every technology in the PRD. Run once after PRD creation.
+
+Deep technology research with source verification, maintenance health, and live fixture capture.
 
 ```bash
-/research-stack              # Research all technologies from PRD.md
-/research-stack PRD.md       # Specify PRD file
-/research-stack --only instantly  # Research single technology
+/research-stack                    # Research all technologies from PRD.md
+/research-stack PRD.md             # Specify PRD file
+/research-stack --only instantly   # Single technology
+/research-stack --fresh            # Bypass research cache
 ```
 
-**Process:**
-1. Reads PRD Section 3 (Technology Decisions) to identify technologies
-2. For each technology: researches official docs, community knowledge via WebSearch
-3. Produces structured profile with auth, endpoints, rate limits, gotchas, validation hooks
-4. **Agent Teams**: Spawns parallel researchers (one per technology)
+**What it does (per technology, in parallel via Agent Teams):**
 
-**Output:** `.agents/reference/{technology}-profile.md` per technology
+1. **Read official documentation** (WebFetch for static docs, browser as fallback for JS-heavy SPAs, `gh` CLI for GitHub)
+2. **Verify against source** — `git clone --depth 1` the recommended SDK; read auth handlers, retry logic, error types. Surface undocumented behaviors as gotchas. Use OpenAPI specs as ground truth when published.
+3. **Maintenance health pass** via `gh` — release cadence, 90-day issue trends, security advisories, license, breaking-change history → drives confidence score
+4. **Alt-comparison** (only when PRD records a Decision in Section 3) — confirm or flag the choice with evidence
+5. **Probe Tier 1 endpoints** with `curl` — capture real responses to `.agents/fixtures/{tech}-{endpoint}.json` for downstream drift detection
+6. **Provenance tags** on every claim: `[source-verified]` / `[doc-only]` / `[community]`
 
-**Run once.** Profiles persist across sessions and are consumed by all downstream commands.
+**Output:** `.agents/reference/{technology}-profile.md` per technology (200-450 lines each), plus captured fixtures in `.agents/fixtures/`.
+
+**Profile sections include:**
+- Auth & setup, data models, key endpoints (with tier classification)
+- SDK/MCP server availability
+- **§6.5 Maintenance & Risk Signals** (release cadence, advisories, confidence)
+- Integration gotchas, capability mapping
+- §9 Live Integration Testing Specification (Tiers 1-4 with real fixtures)
+
+**Caching:** `.agents/cache/research/{tech}-{date}.{md,json}` — 14-day reuse window unless `--fresh`.
+
+**Run once.** Profiles persist across stages and are consumed by Plan, Build, and Validate.
 
 ---
 
-### Plan Phase
+### Stage 3: Plan
 
 #### `/plan-feature`
-Creates comprehensive implementation plan consuming PRD and technology profiles.
+
+ONE comprehensive plan covering the entire PRD. No per-phase invocation, no per-section calls.
 
 ```bash
-/plan-feature "Phase 2: Agent Intelligence"
+/plan-feature              # Plan the full PRD
+/plan-feature --reflect    # Extended reflection pass
 ```
 
 **Process:**
-1. **Scope Analysis** - Reviews PRD, checks technology profiles exist, outputs recommendations
-2. **User Validation** - Discuss approach before planning
-3. **Technology Integration** - Reads `.agents/reference/` profiles, maps endpoints to tasks
-4. **Plan Generation** - Creates 500-750 line plan with agent behavior specs
+1. **Scope Analysis** — Reviews full PRD, all profiles, captured fixtures. Outputs decision recommendations + proposed logical sections + proposed natural milestones to terminal.
+2. **User Validation** — Discuss approach before generating plan.
+3. **Plan Generation** — 1500-2500 line plan organized by **logical sections** (Data Models, External Integrations, Core Logic, Error Handling, Configuration, Tests) with **natural milestones** for `/execute` checkpoints.
 
-**Output:** `.agents/plans/phase-N-feature-name.md` with:
-- Technology profiles consumed and key constraints
-- Agent behavior implementation (decision trees, scenario mappings)
-- Step-by-step tasks referencing profile endpoints
-- Validation strategy mapped to PRD scenarios
+**Output:** `.agents/plans/plan.md` with:
+- Cross-cutting decisions and architecture
+- Logical sections (not phases) with concrete file changes
+- Natural Milestones (M1, M2, M3...) — observable, testable checkpoint moments for `/execute`
+- Validation commands per milestone
+- Provenance-aware: `[doc-only]` claims flagged for verification during build
 
 ---
 
-### Build Phase
+### Stage 4: Build
 
 #### `/execute`
-Executes a development plan with intelligent task parallelization.
+
+Builds the full plan in one session, pausing at natural milestones for user review.
 
 ```bash
-/execute .agents/plans/phase-1.md
+/execute                              # Default: .agents/plans/plan.md
+/execute .agents/plans/plan.md        # Explicit plan
+/execute --no-checkpoints             # Auto-build all milestones (small features only)
+```
+
+**Milestone checkpoint loop:**
+```
+🛑 Milestone M2: Auth wired up complete
+
+  Sections built: External Integrations (auth path)
+  Files modified: 8
+  Validation: pnpm test src/auth
+  Validation result: ✅ PASS
+
+  Continue to M3? [y/n/details]
 ```
 
 **Process:**
-1. Parses plan, loads technology profiles
-2. Analyzes task dependencies, builds dependency graph
-3. **Agent Teams Mode**: Groups independent tasks into parallel batches, spawns teammates
-4. **Sequential Mode**: Executes tasks one at a time (fallback)
+1. Reads full plan (sections + milestones + provenance) + all profiles + fixtures
+2. For each milestone: implements its sections, runs its validation command, pauses for approval
+3. **Agent Teams**: Independent tasks within a milestone parallelize across teammates
+4. **Sequential mode**: One task at a time (fallback)
 5. Tracks progress in `.agents/progress/`
-6. Runs validation phase with unit tests
 
-**Agent Teams parallelization:**
-- Independent tasks run simultaneously across teammates
-- Teammates share code through git push/pull
-- Direct messaging for integration questions
-- Lead coordinates overall flow
+If a milestone's validation fails, halts even if user said "continue all" — needs explicit direction.
 
 ---
 
-### Verify Phase
+### Stage 5: Validate
 
 #### `/validate-implementation`
-Scenario-based validation testing agent behavior against PRD definitions.
+
+Scenario-based validation with live integration tests, synthetic edge case generation, fixture drift detection, and cross-scenario consistency checks.
 
 ```bash
-# Standard: Syntax + Components + Scenarios
-/validate-implementation
-
-# Full: Includes end-to-end pipeline
-/validate-implementation --full
-
-# Specific plan
-/validate-implementation .agents/plans/phase-2.md --full
+/validate-implementation              # Levels 1-3 (always live)
+/validate-implementation --full       # Levels 1-4 (adds end-to-end pipeline)
 ```
 
-**Validation Levels:**
+**Always-on capabilities:**
 
-| Level | What It Tests | Source |
-|-------|---------------|--------|
-| Level 1 | Syntax, types, lint | Plan validation commands |
-| Level 2 | Unit + component tests | Plan validation commands |
-| Level 3 | PRD scenario validation | PRD Section 4.3 scenarios |
-| Level 4 | Full pipeline end-to-end | Plan + PRD (--full only) |
+| Capability | What it does |
+|-----------|-------------|
+| **Tier 1 health + drift** | Re-probes endpoints, diffs against captured fixtures from research-stack — flags API drift |
+| **Tier 2 with cleanup** | Live mutating tests with mandatory idempotent cleanup |
+| **Tier 3 with approval** | Costly tests presented to user; recorded fixtures for replay |
+| **Tier 4 mock-only** | Irreversible operations always use fixtures |
+| **Provenance-aware** | `[doc-only]` claims probed live; `[community]` gotchas converted to directed tests |
+| **Browser-driven scenarios** | When PRD scenarios involve a UI, drives via `claude-in-chrome` with screenshots + console + network capture |
+| **Synthetic edge cases** | Generates inputs/calls for uncovered decision branches, error recovery paths, boundary values |
+| **Cross-scenario consistency** | 1M context holds all scenarios + profiles + results — catches contradictions |
+| **Failure attribution** | Every FAIL gets a chain: auth / schema / logic / external / data / profile-drift |
+| **Differential vs prior run** | Loads previous validation report — flags regressions explicitly |
+| **Coverage gap analysis** | Distinguishes human-defined PRD scenarios vs synthetic auto-probes vs untested |
 
-**Scenario validation tests:**
-- Happy path scenarios from PRD
-- Error recovery paths from PRD
-- Edge cases from PRD
-- Decision tree branch verification
-- Technology integration health checks
-
-**Agent Teams**: Parallel validation — one teammate per scenario category.
+**Output:** `.agents/validation/{feature}-{date}.md` with structured report.
 
 #### `/commit`
-Creates git commits following project conventions.
+
+Creates git commits following conventional commit format.
 
 ```bash
-/commit                  # Commits staged changes
-/commit "feat: message"  # With custom message
+/commit
+/commit "feat: agent reasoning loop"
 ```
 
 ---
 
-## Developing AI Agents
+## Provenance System
 
-The PIV framework is optimized for AI agent development. Here's the recommended workflow:
+Every non-trivial claim in technology profiles is tagged. Tags flow through every downstream stage:
 
-### Phase 1: Foundation
+| Tag | Meaning | How each stage uses it |
+|-----|---------|----------------------|
+| `[source-verified]` | Confirmed by reading SDK/API source, OpenAPI spec, or live probe | Plan trusts; Build trusts; Validate trusts |
+| `[doc-only]` | Stated in docs, not independently verified | Plan flags for verification; Build verifies via live probe; Validate probes live as default |
+| `[community]` | From issues, Stack Overflow, blog posts | Used as targeted edge-case input by Validate's synthetic generation |
 
-**Goal:** Core infrastructure, tools, basic pipeline
+When a `[doc-only]` claim is contradicted by a live probe during Validate, the report flags it as profile drift — re-run `/research-stack --fresh` to correct.
 
-```bash
-# 1. Create project structure and CLAUDE.md
-/create_global_rules_prompt
+---
 
-# 2. Define requirements (agent-native PRD)
-/create-prd
-# → Includes Agent Behavior Specification
-# → Includes Technology Decisions with rationale
-# → Includes Scenario Definitions
+## Why Opus 4.7 + 1M Context Changes the Game
 
-# 3. Research all technologies (run ONCE)
-/research-stack
-# → Produces profiles in .agents/reference/
-# → Auth patterns, endpoints, rate limits, gotchas
+The old PIV loop was designed for 200k context — it forced per-phase cycles to fit work in the window. With 1M:
 
-# 4. Plan foundation
-/plan-feature "Phase 1: Foundation Pipeline"
-# → Consumes technology profiles
-# → Maps PRD scenarios to implementation
+| Before (200k) | Now (1M) |
+|---------------|----------|
+| N×4 cycles per N-phase PRD | 5 stages, period |
+| Per-phase plans (500-750 lines each) | One comprehensive plan (1500-2500 lines) |
+| Plans must be self-contained per phase | Plans cross-reference freely |
+| Research separate per technology, summarized | Each parallel research subagent holds full docs + source + issues |
+| Validation works on summaries | Validation holds all scenarios + profiles + run results simultaneously |
+| Drift between phases as context rebuilds | Cross-cutting consistency from full-fidelity reads |
 
-# 5. Execute (parallelizes with Agent Teams)
-/execute .agents/plans/phase-1.md
-
-# 6. Validate - tests PRD scenarios
-/validate-implementation --full
-# → Tests happy paths, error recovery, edge cases
-# → Verifies decision tree behavior
-# → Checks technology integration
-```
-
-### Phase 2: Agent Intelligence
-
-**Goal:** Agent reasoning loop, decision trees, tool orchestration
-
-```bash
-# Plan agent layer (profiles already available)
-/plan-feature "Phase 2: Agent Intelligence"
-
-# Execute
-/execute .agents/plans/phase-2.md
-
-# Validate - scenario-based
-/validate-implementation --full
-```
-
-### Phase 3+: Iteration
-
-```bash
-# Each phase follows the same loop:
-/plan-feature "Phase N: [Feature]"
-/execute .agents/plans/phase-N.md
-/validate-implementation --full
-/commit
-```
+The framework also exploits Opus 4.7's better agentic capabilities: deeper source-code reasoning, multi-step browser automation, parallel subagent coordination. The 5-stage flow keeps each cognitive activity isolated so each stage gets full attention without carryover noise.
 
 ---
 
 ## Agent Teams Integration
 
-The framework supports Claude Code Agent Teams for parallel execution. Agent Teams is experimental and must be enabled:
+The framework supports Claude Code Agent Teams for parallel execution:
 
 ```json
 // settings.json
@@ -335,157 +302,105 @@ The framework supports Claude Code Agent Teams for parallel execution. Agent Tea
 }
 ```
 
-### Where Agent Teams Helps
+**Where Agent Teams helps:**
 
 | Command | Without Teams | With Teams |
 |---------|--------------|------------|
 | `/research-stack` | Sequential per technology | Parallel — one researcher per technology |
-| `/execute` | One task at a time | Independent tasks run simultaneously |
+| `/execute` | One task at a time | Independent tasks within a milestone run simultaneously |
 | `/validate-implementation` | Sequential scenario testing | Parallel — one validator per scenario category |
-| `/orchestrate-analysis` | Sequential agent phases | Parallel phases where dependencies allow |
+| `/orchestrate-analysis` | Sequential agent phases | Parallel where dependencies allow |
 
-### How It Works
-
-- **Team Lead** reads the plan and identifies parallelizable work
-- **Teammates** are spawned with specific tasks and full context windows
-- Teammates share code through **git push/pull** on shared upstream
-- **Direct messaging** enables real-time coordination between teammates
-- Lead **waits for batch completion** before starting dependent tasks
-
-### Token Considerations
-
-Agent Teams uses significantly more tokens (each teammate = full Claude instance). Best for:
-- Plans with 3+ independent tasks
-- Research across multiple technologies
-- Validation with many scenarios
-
-Not recommended for simple single-file changes or tightly sequential work.
+Each teammate gets full context — with 1M, that's a lot of fidelity per worker.
 
 ---
 
 ## Chain-of-Thought & Structured Reasoning
 
-Every PIV command uses structured reasoning internally to improve output quality. This happens automatically — no configuration needed.
+Every PIV command uses structured reasoning. No configuration needed.
 
-### How It Works
+**Three layers:**
 
-Each command has three reasoning layers:
-
-1. **Chain-of-Thought (CoT)** — Internal step-by-step reasoning before generating output. Different styles per command complexity:
+1. **Chain-of-Thought (CoT)** — internal step-by-step reasoning. Styles vary per command:
 
 | Style | Commands | Description |
 |-------|----------|-------------|
-| Zero-shot | `/prime`, `/commit` | Simple step-by-step: "1. Scan structure. 2. Check progress..." |
-| Few-shot | `/create-prd`, `/create_global_rules_prompt` | Includes examples of good vs bad output quality |
-| Tree-of-Thought | `/plan-feature`, `/orchestrate-analysis` | Explores 2-3 approaches, evaluates each, selects best |
-| Per-subtask | `/execute`, `/research-stack`, `/validate-implementation` | Each task/technology/scenario gets its own reasoning chain |
+| Zero-shot | `/prime`, `/commit` | Simple step-by-step |
+| Few-shot | `/create-prd`, `/create_global_rules_prompt` | Includes examples of good vs bad output |
+| Tree-of-Thought | `/plan-feature`, `/orchestrate-analysis` | Explores 2-3 approaches, evaluates each |
+| Per-subtask | `/execute`, `/research-stack`, `/validate-implementation` | Each task/technology/scenario gets own reasoning chain |
 
-2. **Reasoning Summary** — A condensed 4-8 bullet summary visible in terminal output, showing *what was found* (not the full thinking process):
-
+2. **Reasoning Summary** — 4-8 bullet summary visible in terminal:
 ```
 ### Reasoning
-- Scanned 14 tracked files, identified 3 config patterns
-- Cross-referenced PRD Phase 2 with 2 technology profiles
-- Gap found: no rate limit handling for X API
-- Recommending: add retry logic before planning
+- Researched 4 technologies from PRD §3
+- 87% claims [source-verified], 11% [doc-only], 2% [community]
+- Key finding: Anthropic SDK v0.30 deprecates messages.create — use messages.stream
+- Maintenance: 3/4 profiles high-confidence; ElevenLabs flagged (stale 8mo)
 ```
 
-3. **Self-Reflection** — A brief self-critique after generation, output to terminal only (never pollutes file artifacts):
-
-```
-### Reflection
-- ✅ All PRD scenarios accounted for
-- ⚠️ Technology profile for Redis not found — flagged in recommendations
-- ✅ Line count within budget (623 lines)
-```
-
-### Why This Matters
-
-- **Reduces drift** — Claude follows a structured reasoning path instead of free-associating
-- **Improves consistency** — Every run follows the same cognitive steps regardless of context window state
-- **Catches gaps at generation time** — Reflection identifies missing scenarios, misalignment with PRD, or incomplete coverage before the human even reviews
-- **Zero configuration** — Works automatically on every command invocation
+3. **Self-Reflection** — terminal-only self-critique catching gaps before human review.
 
 ---
 
 ## PIV-Automator-Hooks
 
-Optional machine-readable metadata blocks that can be appended to artifacts, preparing the framework for future autonomous SDK orchestration.
-
-### What They Are
-
-Simple key-value blocks at the end of file artifacts:
+Optional machine-readable metadata for future autonomous SDK orchestration.
 
 ```
 ## PIV-Automator-Hooks
 validation_status: partial
-failure_categories: edge-cases,rate-limits
-suggested_action: re-execute
-suggested_command: execute
-retry_remaining: 2
+fixture_drift_count: 1
+profile_drift_flagged: 1
+synthetic_tests_generated: 12
+synthetic_tests_passed: 11
+regressions_vs_prior: 0
+suggested_action: refresh-research
+suggested_command: research-stack
+suggested_arg: "--only elevenlabs --fresh"
 confidence: medium
 ```
 
-- 5-15 lines, regex-parseable (`^([a-z_]+): (.+)$`)
-- Each command defines its own keys (next command, confidence, status, etc.)
-- Designed for a future SDK agent to parse and make deterministic decisions
+5-15 lines, regex-parseable (`^([a-z_]+): (.+)$`). Disabled by default.
 
-### Enabling Hooks
-
-Hooks are **disabled by default** — manual workflow stays clean.
-
-**Project-level toggle** (in CLAUDE.md):
+**Enable per-project** in CLAUDE.md:
 ```markdown
 ## PIV Configuration
 - hooks_enabled: true
 ```
 
-**Per-command override:**
-```bash
-/create-prd myproject --with-hooks    # Enable for this run
-/validate-implementation --no-hooks   # Disable for this run
-```
-
-### Hook Placement
-
-- Commands that produce file artifacts (PRD, plans, profiles, validation reports) → hooks appended to the file
-- Terminal-only commands (`/prime`, `/commit`, `/create_global_rules_prompt`) → hooks appear in terminal output
-
-### Future Vision
-
-A single autonomous "PIV Automator" agent that:
-1. Starts from a goal or last artifact state
-2. Runs `/prime` → parses hooks → decides next command and arguments
-3. Loops on failures using validation hooks (`retry_remaining`, `suggested_action`)
-4. Mimics phase isolation with intelligent `/clear` + `/prime`
-5. Uses regex on `## PIV-Automator-Hooks` for fast, deterministic decisions
-
-Hooks are deliberately minimal and boring — enabling fast, deterministic parsing without LLM inference.
+**Per-command override:** `--with-hooks` / `--no-hooks` flags.
 
 ---
 
 ## Project Structure
 
-After using PIV commands, your project will have:
+After running the 5 stages:
 
 ```
 your-project/
 ├── .claude/
-│   └── commands/           # PIV commands (copy from piv-dev-kit)
+│   └── commands/                    # PIV commands
 ├── .agents/
-│   ├── plans/              # Implementation plans
-│   │   ├── phase-1-foundation.md
-│   │   └── phase-2-agent.md
-│   ├── validation/         # Validation reports
-│   │   ├── phase-1-2026-02-05.md
-│   │   └── phase-2-2026-02-05.md
-│   └── reference/          # Technology profiles (from /research-stack)
-│       ├── instantly-api-profile.md
-│       ├── x-api-profile.md
-│       └── elevenlabs-profile.md
-├── CLAUDE.md               # Project rules (with Agent Teams playbook)
-├── PRD.md                  # Agent-native requirements
-└── src/                    # Your code
+│   ├── plans/
+│   │   └── plan.md                  # Single comprehensive plan
+│   ├── progress/
+│   │   └── plan-progress.md         # Milestone progress tracking
+│   ├── validation/
+│   │   ├── feature-2026-05-04.md    # Validation reports
+│   │   └── evidence/                # Browser scenario screenshots/HARs
+│   ├── reference/
+│   │   ├── instantly-api-profile.md
+│   │   ├── x-api-profile.md
+│   │   └── elevenlabs-profile.md    # Technology profiles
+│   ├── fixtures/
+│   │   ├── instantly-list.json      # Captured Tier 1 fixtures
+│   │   └── x-tweet.json
+│   └── cache/
+│       └── research/                # 14-day research cache
+├── CLAUDE.md
+├── PRD.md
+└── src/
 ```
 
 ---
@@ -499,11 +414,11 @@ your-project/
 - Make Agent Behavior Specification the most detailed section
 - Include 8-15 scenario definitions with error paths
 - Capture technology decisions with rationale from conversation
-- Reference scenarios in user stories
+- Skip Section 9 (Phases) by default — only opt in for genuinely incrementally shippable work
 
 **Don't:**
 - Include code snippets (save for plans)
-- Make Agent Behavior Specification optional
+- Add phases out of habit — they create artificial seams
 - Skip error recovery patterns
 - Leave technology choices unexplained
 
@@ -511,49 +426,66 @@ your-project/
 
 **Do:**
 - Run `/research-stack` once after PRD
-- Let it research official docs AND community knowledge
-- Review profiles for accuracy before planning
-- Update profiles if implementation reveals gaps
+- Let it verify docs against source (the biggest accuracy win)
+- Review provenance distribution — high `[source-verified]` ratio = high confidence
+- Capture fixtures with real test credentials when available
+- Run `--fresh` if a major version dropped or validate flagged drift
 
 **Don't:**
 - Skip research and guess at API patterns
 - Run before the PRD exists
-- Rerun for every phase (profiles persist)
+- Treat profiles as immutable — re-run on flagged drift
+
+### Planning
+
+**Do:**
+- Plan the full PRD in one shot
+- Organize by logical sections, not phases
+- Identify 3-7 natural milestones — observable, testable, independently meaningful
+- Bake validated decisions into NOTES section
+- Reference provenance — flag `[doc-only]` claims for live verification during build
+
+**Don't:**
+- Re-invoke `/plan-feature` per phase (the old way)
+- Plan without reading all profiles + fixtures
+- Set milestones at arbitrary points — they should map to real testable units
 
 ### Validation
 
 **Do:**
-- Run `--full` before shipping
-- Test all PRD scenarios (happy, error, edge)
-- Verify decision tree branches
-- Check technology integration health
+- Run `/validate-implementation` in a fresh context window — implementation bias is real
+- Always run live tier tests (Tiers 1-3) — that's the default
+- Review synthetic edge case results — they catch what PRD authors missed
+- Investigate failure attribution chains, don't stop at "test failed"
+- Compare against prior run — regressions matter
 
 **Don't:**
-- Skip scenario validation
+- Skip live tier tests by treating everything as mock
+- Ignore fixture drift warnings
+- Move to ship with cross-scenario consistency findings unresolved
 - Trust static analysis alone
-- Move to next phase with scenario failures
-- Ignore error recovery path testing
 
 ---
 
 ## Command Cheat Sheet
 
-| Command | When to Use | Output |
-|---------|-------------|--------|
-| `/prime` | Start of session | Terminal summary + next step |
-| `/create-prd` | New project/feature | `PRD.md` (agent-native) |
-| `/create_global_rules_prompt` | New project setup | `CLAUDE.md` |
-| `/research-stack` | After PRD, before planning (once) | `.agents/reference/*.md` |
-| `/plan-feature` | Before implementing each phase | `.agents/plans/*.md` |
-| `/plan-feature --reflect` | Extended reflection pass | `.agents/plans/*.md` |
-| `/execute` | After plan approved | Implemented code |
-| `/validate-implementation` | After execution | `.agents/validation/*.md` |
-| `/validate-implementation --full` | Before shipping | Full scenario results |
-| `/commit` | After validation | Git commit |
-| `/create_reference` | Need documentation | `.agents/reference/*.md` |
-| `/orchestrate-analysis` | Complex codebase analysis | Analysis report |
+| Command | Stage | Output |
+|---------|-------|--------|
+| `/prime` | Any | Stage detection + context summary |
+| `/create-prd` | 1 | `PRD.md` |
+| `/create_global_rules_prompt` | Setup | `CLAUDE.md` |
+| `/research-stack` | 2 | `.agents/reference/*.md` + `.agents/fixtures/*.json` |
+| `/research-stack --fresh` | 2 | Bypass cache, re-research |
+| `/plan-feature` | 3 | `.agents/plans/plan.md` |
+| `/plan-feature --reflect` | 3 | Plan with extended reflection pass |
+| `/execute` | 4 | Implemented code, milestone checkpoints |
+| `/execute --no-checkpoints` | 4 | Auto-build all milestones (small features) |
+| `/validate-implementation` | 5 | `.agents/validation/*.md` |
+| `/validate-implementation --full` | 5 | Adds end-to-end pipeline test |
+| `/commit` | Ship | Git commit |
 
-**Global flags** (work on any command):
+**Global flags:**
+
 | Flag | Effect |
 |------|--------|
 | `--with-hooks` | Enable PIV-Automator-Hooks for this run |
@@ -565,25 +497,36 @@ your-project/
 
 ### "Technology profiles not found"
 ```bash
-ls .agents/reference/  # Check what exists
-/research-stack        # Generate profiles from PRD
+ls .agents/reference/   # Check what exists
+/research-stack         # Stage 2 — generate profiles
 ```
 
-### "Plan not found"
+### "Fixture drift detected" during validation
+The API changed since `/research-stack` ran. Update profiles:
 ```bash
-ls .agents/plans/  # Check what exists
-/plan-feature "Phase 1"  # Create if missing
+/research-stack --only [tech] --fresh
 ```
 
-### Scenario validation failing
-- Check PRD Section 4.3 scenarios match implementation
-- Verify technology profiles are accurate (rate limits, endpoints)
-- Check if external services are reachable
-- Review mock strategy in technology profile Section 9
+### "Profile drift flagged" during validation
+A `[doc-only]` claim was contradicted by a live probe. Re-run research with verification:
+```bash
+/research-stack --only [tech] --fresh
+```
+
+### Plan not found
+```bash
+ls .agents/plans/       # Check what exists
+/plan-feature           # Stage 3 — plan the PRD
+```
+
+### Synthetic edge case failed
+The plan didn't account for that branch. Two options:
+1. Update the implementation to handle the case
+2. Update PRD §4.2 (decision trees) or §4.4 (error recovery) to clarify intended behavior, then re-plan
 
 ### Context lost after /clear
 ```bash
-/prime  # Reloads context, discovers profiles, shows next step
+/prime                  # Detects current stage, loads stage-appropriate context
 ```
 
 ### Agent Teams not working
@@ -597,17 +540,16 @@ ls .agents/plans/  # Check what exists
 ## Contributing
 
 This framework evolves based on real-world usage. Key files:
-
 - `.claude/commands/*.md` - Command definitions
 - `CLAUDE.md` - Framework development rules
 
 When modifying commands:
 1. Read the full command first
-2. Preserve PIV loop philosophy
+2. Preserve the 5-stage flow
 3. Ensure Agent Teams compatibility (parallel + sequential paths)
-4. Include Reasoning Approach, Hook Toggle, Reasoning/Reflection output sections
-5. Test the workflow end-to-end
-6. Keep cross-references consistent (PRD sections, profile structure)
+4. Include Reasoning Approach, Hook Toggle, Reasoning/Reflection sections
+5. Test the workflow end-to-end across all 5 stages
+6. Keep cross-references consistent (PRD sections, profile structure, provenance tags)
 
 ---
 
@@ -619,23 +561,32 @@ MIT - Use freely for your agent development projects.
 
 ## Summary
 
-The PIV Dev Kit transforms AI agent development from chaotic to systematic:
+The PIV Dev Kit transforms AI agent development from chaotic to systematic, exploiting Opus 4.7's 1M context for cleaner, faster, deeper iteration:
 
-1. **Prime** - Build context that persists
-2. **Define** - Agent-native PRD with behavior specs and scenarios
-3. **Research** - Deep technology profiles (run once)
-4. **Plan** - Technology-informed, scenario-mapped implementation plans
-5. **Build** - Parallel execution with Agent Teams
-6. **Verify** - Scenario-based validation proving the agent behaves correctly
+1. **PRD** — agent-native requirements with behavior specs and scenarios
+2. **Research** — source-verified technology profiles with maintenance signals and captured fixtures
+3. **Plan** — one comprehensive plan covering the full PRD with natural milestones
+4. **Build** — milestone-checkpointed implementation in one session
+5. **Validate** — live + synthetic + browser-driven validation with fresh adversarial context
 
-Every command uses **structured Chain-of-Thought reasoning** internally, outputs **visible reasoning summaries** for transparency, and performs **self-reflection** to catch gaps before human review. Optional **PIV-Automator-Hooks** prepare artifacts for future autonomous SDK orchestration.
+Provenance tags flow end-to-end. Drift detection keeps profiles honest. Synthetic generation catches what PRD authors missed. Cross-scenario consistency checks catch contradictions invisible in pure pass/fail.
 
-Every phase produces artifacts that survive context resets, enabling true iterative development with AI assistance.
+Every artifact survives context resets. Every stage starts fresh.
 
 **Start here:**
 ```bash
-/prime
 /create-prd
+# /clear
+/prime
 /research-stack
-/plan-feature "Phase 1"
+# /clear
+/prime
+/plan-feature
+# /clear
+/prime
+/execute
+# /clear
+/prime
+/validate-implementation
+/commit
 ```

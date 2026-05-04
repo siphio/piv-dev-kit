@@ -25,10 +25,26 @@ Write the PRD to: `$ARGUMENTS` (default: `PRD.md`)
 - Enables efficient human reading and validation
 - Avoids context bloat when loaded by AI assistants
 - Forces prioritization of essential information
-- Each phase must be self-contained for `/plan-feature` workflow
 
 **If exceeding 750 lines:** Trim generic sections, reduce examples, compress non-agent sections.
 **If under 500 lines:** Expand agent behavior scenarios, add more decision paths, detail error recovery.
+
+## CRITICAL: No Phases by Default
+
+The PRD describes the feature as **one coherent system**, not a sequence of phases. Phases are an **opt-in pattern** for projects where work is genuinely incrementally shippable to users (e.g. "Phase 1: Auth ships to prod, then Phase 2: Dashboard").
+
+**Default mode (no phases):**
+- Skip Section 9 (Implementation Phases) entirely
+- The downstream `/plan-feature` produces ONE comprehensive plan covering the full PRD
+- `/execute` builds the whole thing in one session, with internal checkpoints at natural milestones the planner identifies
+
+**Opt-in to phases when:**
+- User explicitly requests phased delivery
+- Work has hard external dependencies that benefit from explicit ordering
+- Different domains (backend vs frontend vs admin) make clean seams
+- Multiple devs working in parallel on different chunks
+
+If unsure, **skip phases**. They add structural overhead that's only worth it when the work is genuinely shippable in chunks.
 
 ## Reasoning Approach
 
@@ -59,6 +75,8 @@ Given: Input
 When: Agent runs
 Then: Output
 ```
+
+The PRD is Stage 1 of the 5-stage flow: **PRD → Research → Plan → Build → Validate**. After this PRD is written, the user runs `/clear` and opens a fresh context window for `/research-stack`.
 
 ## Hook Toggle
 
@@ -194,11 +212,10 @@ Define 8-15 scenarios covering:
 - [ ] Criterion 3
 
 **Scenarios**: SC-001, SC-003 (references to Section 4.3)
-**Phase:** [Which implementation phase]
 **Status:** ⚪ Not Started
 ```
 
-**IMPORTANT:** User stories reference scenarios from Section 4.3. Each scenario maps to at least one user story.
+**IMPORTANT:** User stories reference scenarios from Section 4.3. Each scenario maps to at least one user story. (If the PRD opts into phases via Section 9, also add a `**Phase:**` field referencing the phase number.)
 
 ---
 
@@ -241,11 +258,13 @@ Define 8-15 scenarios covering:
 
 ---
 
-### **9. Implementation Phases** (120-160 lines)
+### **9. Implementation Phases** (OPTIONAL — only if PRD author opts in)
 
-> **WORKFLOW CONTEXT:** Each phase is a self-contained brief for `/plan-feature`. After `/clear` and `/prime`, the user reads a phase, discusses, then runs `/plan-feature`.
+> **Default: skip this section.** The downstream `/plan-feature` will produce ONE comprehensive plan covering the entire PRD, with natural milestones inside it. Phases create artificial seams that aren't needed for most features.
+>
+> **Include this section ONLY when:** the work is genuinely incrementally shippable to users (e.g. Phase 1 ships to prod, then Phase 2 builds on it). If unsure, skip.
 
-Break MVP into 3-4 phases. Each phase: 40-55 lines.
+If opting in, break MVP into 3-4 phases. Each phase: 40-55 lines.
 
 ```markdown
 ---
@@ -300,10 +319,11 @@ Break MVP into 3-4 phases. Each phase: 40-55 lines.
 ```markdown
 ## Current Focus
 
-**Active Phase:** Phase [N] - [Name]
+**Active Stage:** PRD | Research | Plan | Build | Validate
 **Active Stories:** US-XXX, US-XXX
 **Status:** 🟡 In Progress
 **Research Status:** [Complete / Pending] (has /research-stack been run?)
+**Plan Status:** [Complete / Pending] (has /plan-feature been run?)
 
 **Blockers:**
 - [Any blockers, or "None"]
@@ -313,6 +333,8 @@ Break MVP into 3-4 phases. Each phase: 40-55 lines.
 
 **Last Updated:** [Date]
 ```
+
+(If the PRD opted into phases via Section 9, also include `**Active Phase:**` here.)
 
 ---
 
@@ -399,8 +421,8 @@ After creating the PRD:
 1. Confirm file path
 2. Report line count (must be 500-750)
 3. List any assumptions made
-4. Suggest which phase to start with
-5. **Remind user**: Run `/research-stack` before `/plan-feature` to generate technology profiles
+4. Confirm whether phases were used (default: no) and why
+5. **Tell user**: Stage 1 (PRD) is complete. Next: `/clear`, then open a fresh context window and run `/research-stack` (Stage 2)
 
 ### Reasoning
 
@@ -411,7 +433,7 @@ Output 4-8 bullets summarizing your generation process:
 - Extracted [N] technology decisions from conversation
 - Defined [N] scenarios ([N] happy, [N] error, [N] edge)
 - [N] user stories mapped to scenarios
-- Phased into [N] implementation phases
+- Phases: [none — single coherent system | N phases — opted in because: REASON]
 - Key assumption: [if any]
 ```
 
@@ -433,7 +455,9 @@ If hooks are enabled, append to the PRD file:
 prd_status: complete
 technologies_to_research: [comma-separated list]
 scenarios_count: [N]
-phases_count: [N]
+phases_used: [yes|no]
+phases_count: [N or 0]
+next_stage: research
 next_suggested_command: research-stack
 next_arg: "[PRD filename]"
 confidence: [high|medium|low]
@@ -448,5 +472,5 @@ confidence: [high|medium|low]
 - ❌ Optional Agent Behavior section (it's MANDATORY for agent projects)
 - ❌ Technology decisions without rationale
 - ❌ Scenarios without error paths
-- ❌ Phases without technology references
+- ❌ Adding phases by default (phases are opt-in only when work is genuinely incrementally shippable)
 - ❌ Over 750 lines (forces better prioritization)

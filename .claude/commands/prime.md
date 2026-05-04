@@ -10,6 +10,22 @@ description: Prime agent with codebase understanding, technology profiles, and d
 
 Build comprehensive understanding of the codebase by analyzing structure, documentation, technology research profiles, and key files. Produces a context summary that enables all other PIV commands.
 
+`/prime` is the **first command run in every stage** of the 5-stage flow (PRD → Research → Plan → Build → Validate). Each stage gets a fresh context window, and `/prime` loads the right context for that stage. Detect the next stage from project state and prime accordingly.
+
+## Stage Detection
+
+Based on which artifacts exist, detect the current stage and load context appropriately:
+
+| Project state | Current stage | What to load (focused, not exhaustive) |
+|---------------|---------------|---------------------------------------|
+| No PRD | Stage 1 (PRD) | Codebase structure, CLAUDE.md, README — minimal |
+| PRD exists, no `.agents/reference/` | Stage 2 (Research) | Full PRD (all sections), technology decisions in §3, scenarios in §4.3 |
+| Profiles exist, no `.agents/plans/plan.md` | Stage 3 (Plan) | Full PRD + all profiles + captured fixtures + codebase patterns/architecture |
+| Plan exists, no recent execution progress | Stage 4 (Build) | Full PRD + all profiles + full plan + relevant source files for first milestone |
+| Build complete, no recent validation report | Stage 5 (Validate) | Full PRD + all profiles + plan + most recent validation report (for differential diff) + relevant source code |
+
+**Don't load everything every time.** Stage-aware priming keeps each context focused. The 1M window is generous, but unfocused priming wastes tokens and dilutes attention.
+
 ## Reference Files Policy
 
 **Default behavior**: Do NOT read reference files (`.agents/reference/`, `ai_docs/`, `ai-wiki/`, or similar reference directories) in full.
@@ -98,15 +114,15 @@ If `.agents/plans/` exists:
 ```bash
 ls -t .agents/plans/*.md 2>/dev/null
 ```
-Report which plans exist and their phases.
+Report which plans exist and milestone progress.
 
 If `.agents/validation/` exists:
 ```bash
 ls -t .agents/validation/*.md 2>/dev/null
 ```
-Report most recent validation results.
+Report most recent validation results (and load it for Stage 5 differential diff).
 
-If PRD exists, check the "Current Focus" section for active phase and status.
+If PRD exists, check the "Current Focus" section for active stage, status, and (if PRD opted into phases) active phase.
 
 ## Output Report
 
@@ -134,7 +150,8 @@ Provide a concise summary covering:
 - `/research-stack` status: [Complete / Not Run]
 
 ### Development Progress
-- Active PRD phase: [Phase N or "No PRD"]
+- Active stage: [PRD | Research | Plan | Build | Validate]
+- Active PRD phase: [Phase N | not using phases | No PRD]
 - Plans created: [list or "none"]
 - Latest validation: [date and result or "none"]
 - Progress tracking: [`.agents/progress/` status or "no active execution"]
@@ -150,13 +167,15 @@ Provide a concise summary covering:
 - Any immediate observations or concerns
 
 ### Recommended Next Step
-Based on the project state, suggest the next PIV command:
-- No PRD? → "Run `/create-prd` to define requirements"
-- PRD exists, no profiles? → "Run `/research-stack` to research technologies"
-- Profiles exist, no plans? → "Run `/plan-feature \"Phase 1\"` to start planning"
-- Plan exists, not executed? → "Run `/execute .agents/plans/[plan].md`"
-- Executed, not validated? → "Run `/validate-implementation`"
-- Validated? → "Run `/commit` to ship"
+Based on detected stage, suggest the next PIV command:
+- Stage 1 (no PRD)? → "Run `/create-prd` to define requirements"
+- Stage 2 (PRD exists, no profiles)? → "Run `/research-stack` to research technologies"
+- Stage 3 (profiles exist, no plan)? → "Run `/plan-feature` to plan the full PRD"
+- Stage 4 (plan exists, not executed)? → "Run `/execute` to build the plan"
+- Stage 5 (executed, not validated)? → "Run `/validate-implementation`"
+- Validated and clean? → "Run `/commit` to ship"
+
+After running the recommended command, the user should `/clear` and open a fresh context window for the next stage.
 
 ### Reasoning
 
@@ -192,12 +211,12 @@ If hooks are enabled, append to terminal output:
 
 ```
 ## PIV-Automator-Hooks
-current_phase: [define|research|planning|executing|validating|shipping]
-completed_phases: [comma-separated list]
+current_stage: [prd|research|plan|build|validate|ship]
+completed_stages: [comma-separated list]
 pending_items: [brief description]
 recommended_next_command: [command name without /]
 recommended_arg: "[argument string]"
-requires_clear_before_next: [true|false]
+requires_clear_before_next: true
 confidence: [high|medium|low]
 ```
 

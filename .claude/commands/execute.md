@@ -7,12 +7,23 @@ argument-hint: [plan-file-path]
 
 Execute a development plan with intelligent task parallelization and integrated validation. Uses Agent Teams for parallel execution when available, with sequential fallback mode.
 
+**This is Stage 4 of 5** in the PIV flow: PRD → Research → Plan → **Build** → Validate. This command runs in its own fresh context window. It builds the entire plan from the comprehensive plan file produced by Stage 3.
+
+**Builds the FULL plan in one session.** The 1M context window holds the full plan + all technology profiles + all relevant source files simultaneously. There is no per-phase invocation. After this stage completes, the user runs `/clear` and opens a new context window for `/validate-implementation` (Stage 5).
+
+**Pauses at natural milestones, not phase boundaries.** The plan defines natural milestones (M1, M2, M3, ...) — concrete, observable, testable checkpoint moments. After completing the work for each milestone, this command:
+1. Reports what was just completed
+2. Runs the milestone's validation command
+3. Pauses for user "continue?" approval before starting the next milestone
+
+If the plan opted into PRD phases, milestones are organized within phases but the checkpoint mechanism is the same.
+
 ## Reasoning Approach
 
 **CoT Style:** Per-subtask
 
 For each task or batch:
-1. Load plan context and relevant technology profiles
+1. Load plan context and relevant technology profiles (with provenance tags — treat `[doc-only]` claims as hypotheses to verify during build, not facts)
 2. Resolve dependencies — confirm prerequisites are complete
 3. Analyze the task — what files to create/modify, what patterns to follow
 4. Implement following plan specifications and profile constraints
@@ -23,6 +34,8 @@ After each batch, perform brief reflection:
 - Any conflicts between parallel task outputs?
 - Are dependent tasks now unblocked?
 
+After each milestone, pause for user review before continuing to the next milestone.
+
 ## Hook Toggle
 
 Check CLAUDE.md for `## PIV Configuration` → `hooks_enabled` setting.
@@ -31,9 +44,11 @@ Strip flags from arguments before using remaining text as plan file path.
 
 ## Step 1: Read and Parse Plan
 
-- Read plan file from `$ARGUMENTS[0]`
+- Read plan file from `$ARGUMENTS[0]` (default: `.agents/plans/plan.md`)
 - Extract `tasks` array with `id`, `description`, `depends_on`, and `output_files` fields
+- **Extract `Natural Milestones` section** — list of M1, M2, M3, ... with their validation commands and "sections completed" mapping. Tasks are grouped under milestones for the checkpoint flow.
 - Parse `TECHNOLOGY PROFILES CONSUMED` section and load profile references from `.agents/reference/`
+- Load any captured fixtures from `.agents/fixtures/` (used by Tier 1 health checks during milestone validation)
 - Validate plan structure and task IDs for circular dependencies
 
 ## Step 2: Initialize Progress Tracking
@@ -60,6 +75,35 @@ Strip flags from arguments before using remaining text as plan file path.
 - Identify import statements and integration points for referenced modules
 - Analyze technology profile requirements and check for available tools/libraries
 - Document analysis findings for team context
+
+## Step 5.5: Milestone Checkpoint Loop
+
+The full plan is built milestone-by-milestone. After each milestone:
+
+```
+🛑 Milestone [M1: name] complete
+
+  Sections built: [list]
+  Files modified: [count]
+  Validation: [validation command from plan]
+  Validation result: ✅ PASS | ⚠️ PARTIAL | ❌ FAIL
+
+  Continue to [M2: name]? [y/n/details]
+```
+
+**User responses:**
+- `y` / `continue` — proceed to next milestone
+- `n` / `stop` — halt execute; user reviews/iterates before resuming
+- `details` — show file diffs, validation output, integration notes; then re-prompt
+
+**Skip checkpoint only when:**
+- User passed `--no-checkpoints` flag (auto-build all milestones, used for trusted small features)
+- Plan has only one milestone
+
+If a milestone's validation fails:
+- Do NOT auto-proceed even if user said "continue all"
+- Report failure clearly with attribution chain
+- Wait for user direction (fix in same session, or stop and re-plan)
 
 ## Step 6: Implementation - Agent Teams Mode (When Available)
 
@@ -182,7 +226,7 @@ Implementation Summary:
 - Integration points verified: {count}
 
 Next Steps:
-→ Run `/validate-implementation {plan-file}` to validate against PRD scenarios
+→ Stage 4 (Build) complete. Next: `/clear`, then open a fresh context window and run `/validate-implementation` (Stage 5).
 - {remediation for any failures before validation}
 - {documentation updates if needed}
 ```
@@ -216,11 +260,13 @@ If hooks are enabled, append to the progress file (`.agents/progress/{plan-name}
 execution_status: [success|partial|failed]
 tasks_completed: [N]/[Total]
 tasks_blocked: [N]
+milestones_completed: [N]/[Total]
 files_created: [N]
 files_modified: [N]
+next_stage: validate
 next_suggested_command: validate-implementation
-next_arg: "[plan-path] --full"
-requires_clear: [true|false]
+next_arg: "[plan-path]"
+requires_clear: true
 confidence: [high|medium|low]
 ```
 

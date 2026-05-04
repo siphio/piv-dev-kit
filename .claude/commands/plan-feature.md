@@ -30,9 +30,15 @@ Transform a feature request into a **comprehensive implementation plan** through
 
 **Key Philosophy**: Context is King. The plan must contain ALL information needed for implementation - patterns, mandatory reading, technology integration, agent behavior specs, validation commands - so the execution agent succeeds on the first attempt.
 
-**Two-Phase Process** (when PRD exists):
+**Two-Step Process** (when PRD exists):
 1. **Scope Analysis** → Output recommendations with justifications to terminal → User validates
-2. **Plan Generation** → Create implementation plan with validated decisions baked in
+2. **Plan Generation** → Create ONE comprehensive implementation plan covering the ENTIRE PRD with validated decisions baked in
+
+**This is Stage 3 of 5** in the PIV flow: PRD → Research → **Plan** → Build → Validate. This command runs in its own fresh context window. After it completes, the user runs `/clear` and opens a new context window for `/execute` (Stage 4).
+
+**Single Comprehensive Plan**: This command produces ONE plan file at `.agents/plans/plan.md` covering the entire PRD. Do NOT plan per-phase or per-section of the PRD. The 1M context window holds the full PRD + all profiles + all relevant source files simultaneously, and a single coherent plan beats a sequence of phase-plans for cross-cutting consistency.
+
+**No phases by default**: organize the plan by **logical sections** (data models, API client, agent loop, error handling, configuration, etc.), not phases. Identify **natural milestones** for `/execute` to pause at — these are checkpoint moments inside one continuous build, not artificial phase boundaries. Use phases ONLY if the PRD explicitly opts into them (PRD Section 9 present and populated).
 
 ## Reasoning Approach
 
@@ -70,26 +76,29 @@ Strip all flags from arguments before using remaining text as the feature descri
 
 **Scope Analysis Process:**
 
-1. **Validate Technology Profiles Exist**
+1. **Validate Technology Profiles & Fixtures Exist**
    - Check if `.agents/reference/` directory exists
    - List all `*-profile.md` files in that directory
-   - If no profiles exist: **WARN**: "Technology profiles not found. Consider running `/research-stack` first for better context."
+   - Check `.agents/fixtures/` for captured Tier 1 fixtures
+   - If no profiles exist: **WARN**: "Technology profiles not found. Consider running `/research-stack` (Stage 2) first for better context."
    - If profiles exist: Continue with analysis below
+   - Note provenance tag distribution per profile (`[source-verified]` vs `[doc-only]` vs `[community]`) — flag low-confidence claims that may need verification during execute
 
-2. **Read the PRD Phase**
-   - Identify which phase is being planned (from user input or PRD "Current Focus")
-   - Extract: What this phase delivers, prerequisites, scope (included/excluded)
-   - Extract: User stories addressed by this phase
+2. **Read the ENTIRE PRD**
+   - Read the full PRD top to bottom — all sections
+   - If PRD has phases (Section 9 populated): note them but plan as a single coherent system anyway, with phase-aware milestones
+   - If PRD has no phases: plan as one coherent system with logical-section organization
+   - Extract: feature scope, user stories, decision trees, scenarios, error recovery patterns, technology decisions
 
-3. **Map User Stories & Agent Behavior**
-   - For each user story in scope, extract acceptance criteria
-   - Review Section 4.2 (Decision Trees) for agent behaviors relevant to this phase
-   - Review Section 4.3 (Scenarios) to understand workflows this phase enables
-   - Review Section 4.4 (Error Recovery Patterns) for failure modes this phase must handle
+3. **Map User Stories & Agent Behavior (full PRD)**
+   - For each user story, extract acceptance criteria
+   - Review Section 4.2 (Decision Trees) — every decision becomes implementation logic
+   - Review Section 4.3 (Scenarios) — every scenario becomes a validation target
+   - Review Section 4.4 (Error Recovery Patterns) — every recovery path becomes implementation logic
    - These become validation checkpoints for the plan
 
 4. **Identify Decision Points**
-   - Find "Discussion Points for Clarification" in the PRD phase
+   - Find "Discussion Points for Clarification" across the entire PRD
    - Find any ambiguous requirements or multiple valid approaches
    - List each decision that affects implementation or agent behavior
    - Cross-reference technologies in `.agents/reference/` profiles
@@ -103,15 +112,18 @@ Strip all flags from arguments before using remaining text as the feature descri
 **Terminal Output Format:**
 
 ```
-## Scope Analysis: [Phase Name]
+## Scope Analysis: [Feature Name]
 
-**PRD Phase:** [N] - [Name]
-**User Stories:** US-XXX, US-XXX
+**PRD**: [path]
+**User Stories:** [N total]
+**Scenarios:** [N total]
+**Decision Trees:** [N total]
 **Technology Profiles Available**: [list profiles or "none found"]
-**Prerequisites:** [Status of each - ✅ Complete / ⚪ Not Started / 🔴 Blocked]
+**Captured Fixtures**: [N]
+**Phases in PRD**: none | [N phases — opted in for REASON]
 
-### What This Phase Delivers
-[2-3 sentence summary from PRD]
+### What This Plan Delivers
+[2-3 sentence summary covering the full PRD scope]
 
 ### Recommendations
 
@@ -123,13 +135,23 @@ Strip all flags from arguments before using remaining text as the feature descri
    → [Your recommendation]
    Why: [Justification]
 
+### Proposed Logical Sections
+1. [Section name] — [brief]
+2. [Section name] — [brief]
+3. ...
+
+### Proposed Natural Milestones (for /execute checkpoints)
+- M1: [milestone description, e.g. "auth wired up + smoke test passes"]
+- M2: [milestone description]
+- M3: [milestone description]
+
 ---
 
-Ready to generate plan with these decisions, or would you like to discuss any recommendations?
+Ready to generate the comprehensive plan with these decisions, or would you like to discuss any recommendations?
 ```
 
 **After User Validation:**
-- If user confirms: Proceed to Phase 1 with decisions locked in
+- If user confirms: Proceed to plan generation with decisions locked in
 - If user adjusts: Update recommendations, confirm again
 - Document final decisions in the plan's NOTES section
 
@@ -424,51 +446,76 @@ So that <benefit/value>
 
 ## IMPLEMENTATION PLAN
 
-### Phase 1: Foundation
+> Organize the plan by **logical sections** (data models, API client, agent loop, error handling, configuration, etc.), not phases. The exact section list depends on the feature — adapt the template below.
 
-<Describe foundational work needed before main implementation>
+### Section: Data Models & Types
 
-**Tasks:**
-
-- Set up base structures (schemas, types, interfaces)
-- Configure necessary dependencies
-- Create foundational utilities or helpers
-
-### Phase 2: Core Implementation
-
-<Describe the main implementation work>
+<Schemas, types, interfaces, validation. Foundation that everything else depends on.>
 
 **Tasks:**
+- [Concrete file + change]
+- [Concrete file + change]
 
-- Implement core business logic
-- Create service layer components
-- Add API endpoints or interfaces
-- Implement data models
-- **[If agent feature]** Implement decision trees and scenario handlers
+### Section: External Integrations
 
-### Phase 3: Integration
-
-<Describe how feature integrates with existing functionality and external technologies>
+<API clients per technology profile. References `.agents/reference/{tech}-profile.md` and uses captured fixtures from `.agents/fixtures/` for test setup.>
 
 **Tasks:**
+- [Concrete file + change per technology]
 
-- Connect to existing routers/handlers
-- Register new components
-- Update configuration files
-- Add middleware or interceptors if needed
-- **[If using technology profile]** Integrate external API calls per profile specification
+### Section: Core Logic
 
-### Phase 4: Testing & Validation
-
-<Describe testing approach>
+<The main implementation — agent loop, business logic, decision tree handlers, scenario implementations from PRD §4.>
 
 **Tasks:**
+- [Concrete file + change]
+- **[If agent feature]** Implement decision trees from PRD §4.2
+- **[If agent feature]** Implement scenarios from PRD §4.3
 
-- Implement unit tests for each component
-- Create integration tests for feature workflow
-- Add edge case tests
-- **[If agent feature]** Test decision tree logic against PRD scenarios
-- Validate against acceptance criteria
+### Section: Error Handling & Recovery
+
+<Implements PRD §4.4 error recovery patterns. Maps to gotchas from technology profiles §7.>
+
+**Tasks:**
+- [Concrete file + change]
+
+### Section: Configuration & Wiring
+
+<Env vars, config files, dependency injection, app entry points.>
+
+**Tasks:**
+- [Concrete file + change]
+
+### Section: Tests
+
+<Unit tests + integration tests using captured fixtures. Validation commands feed into Stage 5 (`/validate-implementation`).>
+
+**Tasks:**
+- [Concrete file + change]
+
+---
+
+## Natural Milestones (Checkpoints for /execute)
+
+> These are checkpoint moments, NOT phases. `/execute` pauses at each milestone for user review before continuing.
+
+- **M1: [Milestone name]** — [Observable outcome, e.g. "data models compile + type-check clean"]
+  - Sections completed: Data Models & Types
+  - Validation: `[command to run]`
+
+- **M2: [Milestone name]** — [Observable outcome, e.g. "auth wired up + Tier 1 health check passes against live API"]
+  - Sections completed: External Integrations (auth path)
+  - Validation: `[command to run]`
+
+- **M3: [Milestone name]** — [Observable outcome, e.g. "first end-to-end scenario passes"]
+  - Sections completed: Core Logic (happy path)
+  - Validation: `[command to run]`
+
+- **M4: [Milestone name]** — [Observable outcome, e.g. "all error recovery paths implemented"]
+
+- **M5: [Milestone name]** — [Observable outcome, e.g. "all tests pass, ready for /validate-implementation"]
+
+Aim for 3–7 milestones. Each milestone should be independently meaningful and testable.
 
 ---
 
@@ -632,17 +679,23 @@ npm run format:check
 
 ## NOTES
 
-<Additional context, design decisions, trade-offs, decisions from Phase 0 scope analysis>
+<Additional context, design decisions, trade-offs, decisions from scope analysis>
 
 ## PIV-Automator-Hooks
 
 > **Only include this section when hooks are enabled (CLAUDE.md `hooks_enabled: true` or `--with-hooks` flag).**
 
 plan_status: ready_for_execution
-phase_source: [Phase N from PRD]
+plan_scope: full_prd
+phases_used: [yes|no]
+phases_count: [N or 0]
+milestones_count: [N]
+sections_count: [N]
 independent_tasks_count: [N]
 dependent_chains: [N]
 technologies_consumed: [comma-separated profile names]
+fixtures_referenced: [N]
+next_stage: build
 next_suggested_command: execute
 next_arg: ".agents/plans/[this-file].md"
 estimated_complexity: [low|medium|high]
@@ -651,22 +704,24 @@ confidence: [N]/10
 
 ## Output Format
 
-**Filename**: `.agents/plans/{kebab-case-descriptive-name}.md`
+**Filename**: `.agents/plans/plan.md` (single comprehensive plan covering the full PRD)
 
-- Replace `{kebab-case-descriptive-name}` with short, descriptive feature name
-- Examples: `add-user-authentication.md`, `implement-search-api.md`, `refactor-database-layer.md`
+For projects with multiple distinct features being planned independently, use kebab-case names: `add-user-authentication.md`, `implement-search-api.md`. Default is `plan.md`.
 
 **Directory**: Create `.agents/plans/` if it doesn't exist
 
 ### Plan Length Guidelines
 
-**STRICT LENGTH REQUIREMENT**: 500-750 lines
-**HARD MINIMUM**: 500 lines - NEVER go below this limit under any circumstances
-**HARD MAXIMUM**: 750 lines - NEVER exceed this limit under any circumstances
+**LENGTH REQUIREMENT**: 1500-2500 lines (single comprehensive plan covering full PRD)
+**HARD MINIMUM**: 1500 lines — anything less suggests the PRD wasn't fully covered
+**HARD MAXIMUM**: 2500 lines — anything more suggests over-elaboration
 
-This is a non-negotiable constraint. The plan MUST fall within the 500-750 line range. Count your lines before finalizing.
+This is a comprehensive plan covering the entire PRD with all logical sections, milestones, validation commands, and decision rationale baked in. The 1M context window means executors can hold this entire plan plus all profiles plus relevant source files simultaneously — exploit that depth.
 
 The plan must contain ONLY valuable, actionable information. Every line must earn its place. No filler, no redundancy, no obvious details.
+
+If under 1500 lines: you've likely under-elaborated on logical sections, milestones, or scenario→implementation mapping. Expand the sections that map PRD §4 (decision trees, scenarios, error recovery) to concrete code paths.
+If over 2500 lines: you're padding. Trim repeated explanations, collapse similar tasks, remove obvious-from-context details.
 
 **Core Principles:**
 
@@ -767,18 +822,21 @@ Output 4-8 bullets summarizing the planning process:
 
 ```
 ### Reasoning
-- Analyzed PRD Phase [N] with [N] user stories
-- Consumed [N] technology profiles
+- Analyzed full PRD with [N] user stories, [N] scenarios, [N] decision trees
+- Consumed [N] technology profiles ([N] [source-verified] claims, [N] [doc-only] flagged for verification during build)
 - Explored [N] approaches for [key decision], selected [choice]
-- Identified [N] independent tasks, [N] sequential chains
+- Organized plan into [N] logical sections with [N] natural milestones for /execute checkpoints
 - Mapped [N] PRD scenarios to validation strategy
+- Phases used: [no — single coherent system | yes — N phases inherited from PRD §9]
 ```
 
 ### Reflection
 
 Self-critique the generated plan (terminal only):
-- Does the plan enable one-pass implementation success?
-- Are technology profile constraints reflected in task descriptions?
-- Do validation commands cover all relevant PRD scenarios?
-- Is every decision from Phase 0 baked into the plan?
-- Is line count within 500-750?
+- Does the plan enable one-pass implementation success across the full PRD?
+- Are technology profile constraints (especially `[source-verified]` claims) reflected in task descriptions?
+- Are `[doc-only]` claims flagged for live verification during build?
+- Do validation commands cover all PRD scenarios?
+- Is every decision from scope analysis baked into the plan?
+- Are natural milestones meaningful and independently testable?
+- Is line count within 1500-2500?
